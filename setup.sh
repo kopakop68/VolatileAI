@@ -16,7 +16,7 @@ pip install --upgrade pip -q
 pip install streamlit plotly pandas numpy pyyaml fpdf2 networkx requests -q
 
 echo "[3/3] Creating output directories..."
-mkdir -p reports/output evidence
+mkdir -p reports/output evidence idata/cached_responses idata/demo_scenarios
 
 echo ""
 echo "=== Setup Complete ==="

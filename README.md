@@ -33,6 +33,8 @@ Open **http://localhost:8502** in your browser.
 
 Five pre-built attack scenarios with realistic synthetic Volatility output for testing:
 
+If you remove those JSON files, the app will show no demo scenarios until you add new files to `idata/demo_scenarios/`.
+
 | Scenario | Description |
 |----------|-------------|
 | **Mimikatz Credential Theft** | Spear-phishing → Word macro → Mimikatz → lateral movement |
@@ -57,7 +59,7 @@ volatile_ai/
 │   ├── styles/theme.css      # Dark forensics theme
 │   ├── components/           # Reusable chart and metric components
 │   └── pages/                # 9 analysis pages
-├── data/
+├── idata/
 │   ├── demo_scenarios/       # 5 attack scenario datasets
 │   └── cached_responses/     # 118+ cached AI responses
 ├── reports/
@@ -75,7 +77,23 @@ volatile_ai/
 
 ## AI Analysis
 
-Install Ollama and pull the Phi-3 Mini model:
+VolatileAI now supports multiple AI providers via environment variables:
+
+- `ollama` (default)
+- `openai`
+- `anthropic` (Claude)
+- `groq`
+- `opentext` (OpenAI-compatible endpoint)
+
+Set provider:
+
+```bash
+export VOLATILEAI_AI_PROVIDER=ollama
+```
+
+### Ollama Setup (Local)
+
+Install Ollama and pull a small model:
 
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
@@ -83,7 +101,47 @@ ollama pull phi3:mini
 ollama serve
 ```
 
-The app auto-detects when Ollama is running and switches to live AI analysis.
+### API Provider Setup Examples
+
+OpenAI:
+
+```bash
+export VOLATILEAI_AI_PROVIDER=openai
+export OPENAI_API_KEY=your_key_here
+export OPENAI_MODEL=gpt-4o-mini
+```
+
+Anthropic (Claude):
+
+```bash
+export VOLATILEAI_AI_PROVIDER=anthropic
+export ANTHROPIC_API_KEY=your_key_here
+export ANTHROPIC_MODEL=claude-3-5-haiku-latest
+```
+
+Groq:
+
+```bash
+export VOLATILEAI_AI_PROVIDER=groq
+export GROQ_API_KEY=your_key_here
+export GROQ_MODEL=llama-3.1-8b-instant
+```
+
+OpenText (OpenAI-compatible API):
+
+```bash
+export VOLATILEAI_AI_PROVIDER=opentext
+export OPENTEXT_API_KEY=your_key_here
+export OPENTEXT_BASE_URL=https://your-opentext-endpoint/v1
+export OPENTEXT_MODEL=gpt-4o-mini
+```
+
+### Good Low-Cost / Free-Tier Friendly Models
+
+- Local Ollama: `phi3:mini`, `qwen2.5:3b`, `llama3.2:3b`, `gemma2:2b`
+- Groq (often generous free tier): `llama-3.1-8b-instant`
+- OpenAI (paid, lower cost): `gpt-4o-mini`
+- Anthropic (paid, lower cost): `claude-3-5-haiku-latest`
 
 ## Tech Stack
 
