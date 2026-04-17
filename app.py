@@ -1,6 +1,7 @@
 """VolatileAI — AI-Powered Memory Forensics Investigation Platform."""
 
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -29,6 +30,22 @@ def init_session_state():
         "plugin_results": {},
         "analysis_complete": False,
         "chat_history": [],
+        "analysis_status": {
+            "state": "idle",
+            "done": 0,
+            "total": 0,
+            "current_plugin": "",
+            "phase": "",
+            "progress_pct": 0,
+            "eta_sec": None,
+            "started_at": None,
+            "error": "",
+            "summary": None,
+            "result_payload": None,
+            "applied": False,
+        },
+        "analysis_task_thread": None,
+        "analysis_lock": threading.Lock(),
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -88,11 +105,18 @@ def main():
         ai_status = st.session_state.ai_engine.provider_status()
 
         st.markdown("<div style='font-size:0.75rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px'>System Status</div>", unsafe_allow_html=True)
+        analysis_state = st.session_state.get("analysis_status", {}).get("state", "idle")
+        evidence_label = (
+            "Loading…"
+            if analysis_state == "running"
+            else ("Loaded" if st.session_state.evidence_loaded else "None")
+        )
+
         st.markdown(
             f"<div style='font-size:0.82rem;color:#94a3b8;line-height:1.8'>"
             f"Volatility 3: {'Ready' if vol_avail else 'Not installed'}<br>"
             f"AI Provider: {ai_status['message']}<br>"
-            f"Evidence: {'Loaded' if st.session_state.evidence_loaded else 'None'}"
+            f"Evidence: {evidence_label}"
             f"</div>",
             unsafe_allow_html=True,
         )
