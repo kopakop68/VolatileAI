@@ -92,23 +92,37 @@ def render_dashboard():
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
-    # --- AI summary ---
+    # --- Priority actions ---
     st.markdown(
         "<h4 style='color:#f1f5f9;font-weight:700;margin-bottom:0.5rem'>"
-        "🤖 AI Quick Summary</h4>",
+        "✅ Investigation Priorities</h4>",
         unsafe_allow_html=True,
     )
 
-    scenario_id = st.session_state.get("current_scenario", "") or ""
-    summary = st.session_state.ai_engine.get_auto_analysis(scenario_id)
+    top_three = sorted(findings, key=lambda f: f.risk_score, reverse=True)[:3]
+    if not top_three:
+        info_banner("No findings yet. Load evidence or a demo scenario to begin analysis.", "info")
+        return
+
+    actions = []
+    for finding in top_three:
+        action = f"Review **{finding.title}** ({finding.risk_level.upper()}, {finding.risk_score:.1f}/10) and validate artifact `{finding.artifact_id}`."
+        actions.append(action)
+
+    actions.append("Open the **AI Analyst** page for guided narrative and remediation recommendations.")
+    actions.append("Generate a **Technical Analysis Report** once critical findings are validated.")
+
+    action_html = "".join(f"<li style='margin:0.45rem 0'>{item}</li>" for item in actions)
 
     st.markdown(
         f"""
-        <div style='background:linear-gradient(135deg,#0f172a 0%,#1a1f3d 100%);
-            border:1px solid rgba(129,140,248,0.15);border-radius:14px;
+        <div style='background:linear-gradient(135deg,#0b1220 0%,#12233f 100%);
+            border:1px solid rgba(56,189,248,0.2);border-radius:14px;
             padding:1.2rem 1.4rem;box-shadow:0 4px 20px rgba(0,0,0,0.25)'>
-            <div style='color:#e2e8f0;font-size:0.9rem;line-height:1.7;white-space:pre-wrap'>
-{summary}
+            <div style='color:#cbd5e1;font-size:0.9rem;line-height:1.65'>
+                <ul style='padding-left:1.1rem;margin:0'>
+                    {action_html}
+                </ul>
             </div>
         </div>""",
         unsafe_allow_html=True,

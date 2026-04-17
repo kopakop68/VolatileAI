@@ -86,13 +86,13 @@ def main():
         st.divider()
 
         vol_avail = st.session_state.vol_engine.is_volatility_available
-        ollama_avail = st.session_state.ai_engine.check_ollama()
+        ai_status = st.session_state.ai_engine.provider_status()
 
         st.markdown("<div style='font-size:0.75rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px'>System Status</div>", unsafe_allow_html=True)
         st.markdown(
             f"<div style='font-size:0.82rem;color:#94a3b8;line-height:1.8'>"
             f"{'🟢' if vol_avail else '🟡'} Volatility 3: {'Ready' if vol_avail else 'Demo Mode'}<br>"
-            f"{'🟢' if ollama_avail else '🟡'} Ollama AI: {'Online' if ollama_avail else 'Cached Mode'}<br>"
+            f"{'🟢' if ai_status['connected'] else '🟡'} AI Provider: {ai_status['message']}<br>"
             f"{'🟢' if st.session_state.evidence_loaded else '⚪'} Evidence: {'Loaded' if st.session_state.evidence_loaded else 'None'}"
             f"</div>",
             unsafe_allow_html=True,

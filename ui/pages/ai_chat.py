@@ -30,26 +30,14 @@ def render_ai_chat():
     ai_engine = st.session_state.ai_engine
     scenario_id = st.session_state.get("current_scenario") or ""
 
-    ollama_connected = getattr(ai_engine, "is_connected", False)
-    if callable(ollama_connected):
-        ollama_connected = ollama_connected()
-
-    if ollama_connected:
-        st.markdown(
-            "<div style='display:flex;align-items:center;gap:6px;margin-bottom:0.8rem'>"
-            "<span style='width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block'></span>"
-            "<span style='color:#94a3b8;font-size:0.85rem'>Ollama connected — live analysis mode</span>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            "<div style='display:flex;align-items:center;gap:6px;margin-bottom:0.8rem'>"
-            "<span style='width:8px;height:8px;border-radius:50%;background:#eab308;display:inline-block'></span>"
-            "<span style='color:#94a3b8;font-size:0.85rem'>Using cached analysis mode</span>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
+    provider_status = ai_engine.provider_status()
+    st.markdown(
+        "<div style='display:flex;align-items:center;gap:6px;margin-bottom:0.8rem'>"
+        f"<span style='width:8px;height:8px;border-radius:50%;background:{provider_status['dot']};display:inline-block'></span>"
+        f"<span style='color:#94a3b8;font-size:0.85rem'>{provider_status['message']}</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
     st.markdown("#### Quick Analysis")
     col1, col2, col3, col4 = st.columns(4)

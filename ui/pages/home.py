@@ -7,23 +7,24 @@ from core.volatility_engine import VolatilityEngine, PluginResult
 
 def _render_hero():
     st.markdown("""
-    <div style='text-align:center;padding:2.5rem 1rem 1.5rem 1rem'>
-        <div style='font-size:3rem;font-weight:900;
-            background:linear-gradient(135deg,#38bdf8 0%,#818cf8 50%,#c084fc 100%);
+    <div style='text-align:center;padding:2.2rem 1rem 1.2rem 1rem'>
+        <div style='font-size:3.1rem;font-weight:900;
+            background:linear-gradient(120deg,#06b6d4 0%,#22d3ee 35%,#60a5fa 70%,#818cf8 100%);
             -webkit-background-clip:text;-webkit-text-fill-color:transparent;
             letter-spacing:-0.02em'>
             VolatileAI
         </div>
-        <div style='font-size:1.15rem;color:#94a3b8;margin-top:0.3rem;font-weight:500'>
-            AI-Powered Memory Forensics &amp; Threat Intelligence
+        <div style='font-size:1.02rem;color:#94a3b8;margin-top:0.35rem;font-weight:500;letter-spacing:0.02em'>
+            Investigate memory evidence faster, map attacker behavior, act with confidence.
         </div>
-        <div style='max-width:640px;margin:1rem auto 0 auto;color:#64748b;font-size:0.9rem;line-height:1.6'>
-            Analyze volatile memory dumps with automated anomaly detection,
-            MITRE ATT&CK mapping, and AI-driven investigation.
-            Load a real evidence file or explore one of the built-in demo scenarios.
+        <div style='display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:0.95rem auto 0 auto'>
+            <span style='font-size:0.72rem;background:#0e7490;color:#cffafe;padding:4px 10px;border-radius:999px;border:1px solid #155e75'>Live Evidence</span>
+            <span style='font-size:0.72rem;background:#1e3a8a;color:#dbeafe;padding:4px 10px;border-radius:999px;border:1px solid #1d4ed8'>Threat Findings</span>
+            <span style='font-size:0.72rem;background:#3f3f46;color:#e4e4e7;padding:4px 10px;border-radius:999px;border:1px solid #52525b'>MITRE Mapping</span>
+            <span style='font-size:0.72rem;background:#3f1d55;color:#f3e8ff;padding:4px 10px;border-radius:999px;border:1px solid #6b21a8'>AI Analysis</span>
         </div>
     </div>
-    <div style='border-bottom:1px solid #1e293b;margin:0 2rem 1.5rem 2rem'></div>
+    <div style='border-bottom:1px solid #1e293b;margin:0 2rem 1.2rem 2rem'></div>
     """, unsafe_allow_html=True)
 
 
@@ -57,7 +58,7 @@ def _render_evidence_loader():
     )
     st.markdown(
         "<p style='color:#64748b;font-size:0.85rem;margin-bottom:1rem'>"
-        "Point to a raw memory dump to begin live analysis.</p>",
+        "Load a real dump to run plugins and generate findings automatically.</p>",
         unsafe_allow_html=True,
     )
 
@@ -131,7 +132,7 @@ def _render_demo_scenarios():
     )
     st.markdown(
         "<p style='color:#64748b;font-size:0.85rem;margin-bottom:1rem'>"
-        "Pre-built attack scenarios with synthetic Volatility data.</p>",
+        "Use curated scenarios if you want an instant walkthrough without a live dump.</p>",
         unsafe_allow_html=True,
     )
 
