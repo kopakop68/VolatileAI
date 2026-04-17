@@ -35,9 +35,9 @@
 10. [UI Styles (`ui/styles/theme.css`)](#10-ui-styles-uistylesthemecss)
 11. [Reports Module (`reports/`)](#11-reports-module-reports)
     - 11.1 [Report Generator (`report_generator.py`)](#111-report-generator-report_generatorpy)
-12. [Data Directory (`idata/`)](#12-data-directory-idata)
-    - 12.1 [Demo Scenarios (`idata/demo_scenarios/`)](#121-demo-scenarios-idatademo_scenarios)
-    - 12.2 [Cached AI Responses (`idata/cached_responses/`)](#122-cached-ai-responses-idatacached_responses)
+12. [Data Directory (`data/`)](#12-data-directory-data)
+    - 12.1 [Demo Scenarios (`data/demo_scenarios/`)](#121-demo-scenarios-datademo_scenarios)
+    - 12.2 [Cached AI Responses (`data/cached_responses/`)](#122-cached-ai-responses-datacached_responses)
 13. [Evidence Directory (`evidence/`)](#13-evidence-directory-evidence)
 14. [Data Flow & Execution Pipeline](#14-data-flow--execution-pipeline)
 15. [Session State Management](#15-session-state-management)
@@ -102,8 +102,8 @@
 ┌──────────────────────────▼──────────────────────────────────────┐
 │                      Data Layer                                 │
 │                                                                 │
-│  idata/demo_scenarios/*.json   — synthetic Volatility output   │
-│  idata/cached_responses/*.json — pre-written AI answers        │
+│  data/demo_scenarios/*.json   — synthetic Volatility output   │
+│  data/cached_responses/*.json — pre-written AI answers        │
 │  evidence/                    — user-supplied memory dumps      │
 │  reports/output/              — generated PDF files            │
 └─────────────────────────────────────────────────────────────────┘
@@ -249,7 +249,7 @@ Central configuration file. All constants are imported by other modules — no h
 | Variable | Value | Purpose |
 |----------|-------|---------|
 | `BASE_DIR` | `Path(__file__).parent` | Project root directory |
-| `DATA_DIR` | `BASE_DIR / "idata"` | Data directory |
+| `DATA_DIR` | `BASE_DIR / "data"` | Data directory |
 | `MITRE_DIR` | `DATA_DIR / "mitre"` | Reserved for MITRE data files |
 | `DEMO_DIR` | `DATA_DIR / "demo_scenarios"` | Demo scenario JSON files |
 | `CACHE_DIR` | `DATA_DIR / "cached_responses"` | Cached AI response JSON files |
@@ -1335,9 +1335,9 @@ Uses `MitreMapper.get_detected_techniques()` to get sorted technique list. For e
 
 ---
 
-## 12. Data Directory (`idata/`)
+## 12. Data Directory (`data/`)
 
-### 12.1 Demo Scenarios (`idata/demo_scenarios/`)
+### 12.1 Demo Scenarios (`data/demo_scenarios/`)
 
 Five pre-built attack scenarios with realistic synthetic Volatility output. Each scenario JSON contains complete plugin data that mirrors what real Volatility 3 would produce.
 
@@ -1367,7 +1367,7 @@ Five pre-built attack scenarios with realistic synthetic Volatility output. Each
 #### Scenario: APT Multi-Stage (`scenario_apt.json`)
 **Attack Chain:** Watering hole → staged payloads → credential harvest → data exfiltration
 
-### 12.2 Cached AI Responses (`idata/cached_responses/`)
+### 12.2 Cached AI Responses (`data/cached_responses/`)
 
 Pre-written expert forensic analysis responses organized by scenario and question type.
 

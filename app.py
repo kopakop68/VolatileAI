@@ -44,7 +44,7 @@ def load_css():
 def main():
     st.set_page_config(
         page_title=APP_NAME,
-        page_icon="🧠",
+        page_icon="VA",
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -55,7 +55,6 @@ def main():
     with st.sidebar:
         st.markdown(
             f"""<div style='text-align:center;padding:1rem 0'>
-            <div style='font-size:2.2rem'>🧠</div>
             <div style='font-size:1.3rem;font-weight:800;color:#f1f5f9;letter-spacing:-0.02em'>
                 {APP_NAME}
             </div>
@@ -70,15 +69,15 @@ def main():
         page = st.radio(
             "Navigation",
             [
-                "🏠 Home & Evidence",
-                "📊 Dashboard",
-                "⚙️ Process Analysis",
-                "🌐 Network Analysis",
-                "🛡️ MITRE ATT&CK",
-                "⏱️ Timeline",
-                "🤖 AI Analyst",
-                "🔍 IOC Summary",
-                "📄 Reports",
+                "Home",
+                "Dashboard",
+                "Process Analysis",
+                "Network Analysis",
+                "MITRE ATT&CK",
+                "Timeline",
+                "AI Analyst",
+                "IOC Summary",
+                "Reports",
             ],
             label_visibility="collapsed",
         )
@@ -91,9 +90,9 @@ def main():
         st.markdown("<div style='font-size:0.75rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px'>System Status</div>", unsafe_allow_html=True)
         st.markdown(
             f"<div style='font-size:0.82rem;color:#94a3b8;line-height:1.8'>"
-            f"{'🟢' if vol_avail else '🟡'} Volatility 3: {'Ready' if vol_avail else 'Demo Mode'}<br>"
-            f"{'🟢' if ai_status['connected'] else '🟡'} AI Provider: {ai_status['message']}<br>"
-            f"{'🟢' if st.session_state.evidence_loaded else '⚪'} Evidence: {'Loaded' if st.session_state.evidence_loaded else 'None'}"
+            f"Volatility 3: {'Ready' if vol_avail else 'Not installed'}<br>"
+            f"AI Provider: {ai_status['message']}<br>"
+            f"Evidence: {'Loaded' if st.session_state.evidence_loaded else 'None'}"
             f"</div>",
             unsafe_allow_html=True,
         )

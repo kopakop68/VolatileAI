@@ -6,7 +6,7 @@ from ui.components.charts import create_timeline
 
 
 def render_timeline():
-    page_header("Forensic Timeline", icon="⏱️")
+    page_header("Forensic Timeline", icon="")
 
     if "findings" not in st.session_state or not st.session_state.findings:
         info_banner("Load evidence first to view the forensic timeline.", type_="warning")
@@ -36,11 +36,11 @@ def render_timeline():
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        stat_card("Total Events", total_events, color="#38bdf8", icon="📋")
+        stat_card("Total Events", total_events, color="#38bdf8")
     with c2:
-        stat_card("High-Risk Events", high_risk_events, color="#ef4444", icon="🚨")
+        stat_card("High-Risk Events", high_risk_events, color="#ef4444")
     with c3:
-        stat_card("Avg Risk Score", f"{avg_risk:.1f}", color="#eab308", icon="📈")
+        stat_card("Avg Risk Score", f"{avg_risk:.1f}", color="#eab308")
 
     st.markdown("")
 
@@ -77,11 +77,11 @@ def render_timeline():
 
         cat = evt.get("category", "unknown")
         cat_icons = {
-            "process": "⚙️", "network": "🌐", "injection": "💉",
-            "dll": "📦", "persistence": "🔁", "credential": "🔑",
-            "service": "🔧",
+            "process": "PROC", "network": "NET", "injection": "INJ",
+            "dll": "DLL", "persistence": "PERS", "credential": "CRED",
+            "service": "SVC",
         }
-        icon = cat_icons.get(cat, "🔍")
+        icon = cat_icons.get(cat, "OBS")
 
         timestamp = evt.get("timestamp", "N/A")
         title = evt.get("title", "Untitled Event")

@@ -18,7 +18,7 @@ SUGGESTED_QUESTIONS = [
 
 
 def render_ai_chat():
-    page_header("AI Forensic Analyst", icon="🤖")
+    page_header("AI Forensic Analyst", icon="")
 
     if "findings" not in st.session_state or not st.session_state.findings:
         info_banner("Load evidence first to interact with the AI analyst.", type_="warning")
@@ -42,7 +42,7 @@ def render_ai_chat():
     st.markdown("#### Quick Analysis")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        if st.button("📋 Auto Summary", width="stretch"):
+        if st.button("Auto Summary", width="stretch"):
             response = ai_engine.get_auto_analysis(scenario_id)
             st.session_state.chat_history.append({
                 "role": "user",
@@ -51,7 +51,7 @@ def render_ai_chat():
             st.session_state.chat_history.append({"role": "assistant", "content": response})
             st.rerun()
     with col2:
-        if st.button("📖 Attack Narrative", width="stretch"):
+        if st.button("Attack Narrative", width="stretch"):
             response = ai_engine.get_attack_narrative(scenario_id)
             st.session_state.chat_history.append({
                 "role": "user",
@@ -60,7 +60,7 @@ def render_ai_chat():
             st.session_state.chat_history.append({"role": "assistant", "content": response})
             st.rerun()
     with col3:
-        if st.button("🔎 IOC List", width="stretch"):
+        if st.button("IOC List", width="stretch"):
             response = ai_engine.get_ioc_list(scenario_id)
             st.session_state.chat_history.append({
                 "role": "user",
@@ -69,7 +69,7 @@ def render_ai_chat():
             st.session_state.chat_history.append({"role": "assistant", "content": response})
             st.rerun()
     with col4:
-        if st.button("🛡️ Recommendations", width="stretch"):
+        if st.button("Recommendations", width="stretch"):
             response = ai_engine.get_recommendations(scenario_id)
             st.session_state.chat_history.append({
                 "role": "user",

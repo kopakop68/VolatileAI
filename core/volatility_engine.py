@@ -6,9 +6,9 @@ Falls back to demo data when Volatility 3 is not installed or no real dump is lo
 import subprocess
 import json
 import hashlib
-import os
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 
 
@@ -60,6 +60,51 @@ class VolatilityEngine:
             except (FileNotFoundError, subprocess.TimeoutExpired):
                 return False
 
+    def _log(self, message: str) -> None:
+        ts = datetime.now().strftime("%H:%M:%S")
+        print(f"[VolatilityEngine {ts}] {message}", flush=True)
+
+    def _run_vol_command_streaming(self, cmd: List[str], timeout: int = 300) -> subprocess.CompletedProcess:
+        """Run a command while streaming stderr/stdout lines to terminal for live logs.
+
+        We still collect complete stdout for JSON parsing after process exit.
+        """
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+
+        stdout_chunks: List[str] = []
+        stderr_chunks: List[str] = []
+
+        try:
+            out, err = proc.communicate(timeout=timeout)
+            if out:
+                stdout_chunks.append(out)
+            if err:
+                stderr_chunks.append(err)
+                for line in err.splitlines():
+                    if line.strip():
+                        self._log(f"{cmd[-1]}: {line}")
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, err = proc.communicate()
+            if out:
+                stdout_chunks.append(out)
+            if err:
+                stderr_chunks.append(err)
+            raise
+
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=proc.returncode,
+            stdout="".join(stdout_chunks),
+            stderr="".join(stderr_chunks),
+        )
+
     @property
     def is_volatility_available(self) -> bool:
         return self._vol_available
@@ -107,42 +152,59 @@ class VolatilityEngine:
             return PluginResult(plugin_name=plugin_name, success=False, data=[], error="Volatility 3 not installed")
 
         try:
+            self._log(f"Starting plugin: {plugin_name}")
             cmd = ["vol", "-f", path, "-r", "json", plugin_name]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            result = self._run_vol_command_streaming(cmd, timeout=300)
 
             if result.returncode != 0:
+                self._log(f"Primary command failed for {plugin_name}, trying python3 -m volatility3 fallback")
                 cmd = ["python3", "-m", "volatility3", "-f", path, "-r", "json", plugin_name]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                result = self._run_vol_command_streaming(cmd, timeout=300)
 
             if result.returncode == 0 and result.stdout.strip():
                 data = json.loads(result.stdout)
+                self._log(f"Completed plugin: {plugin_name} ({len(data)} rows)")
                 return PluginResult(
                     plugin_name=plugin_name, success=True,
                     data=data, raw_output=result.stdout,
                     row_count=len(data)
                 )
             else:
+                self._log(f"Plugin failed: {plugin_name} (rc={result.returncode})")
                 return PluginResult(
                     plugin_name=plugin_name, success=False,
                     data=[], error=result.stderr[:500],
                     raw_output=result.stdout
                 )
         except subprocess.TimeoutExpired:
+            self._log(f"Plugin timed out: {plugin_name}")
             return PluginResult(plugin_name=plugin_name, success=False, data=[], error="Plugin timed out after 300 seconds")
         except json.JSONDecodeError:
+            self._log(f"JSON parse failed for plugin: {plugin_name}")
             return PluginResult(plugin_name=plugin_name, success=False, data=[], error="Failed to parse JSON output")
         except Exception as e:
+            self._log(f"Unhandled plugin error {plugin_name}: {e}")
             return PluginResult(plugin_name=plugin_name, success=False, data=[], error=str(e))
 
-    def run_all_plugins(self, file_path: str, os_type: str = "windows") -> Dict[str, PluginResult]:
+    def run_all_plugins(
+        self,
+        file_path: str,
+        os_type: str = "windows",
+        progress_callback: Optional[Callable[[int, int, str, str], None]] = None,
+    ) -> Dict[str, PluginResult]:
         from config import VOLATILITY_PLUGINS_WINDOWS, VOLATILITY_PLUGINS_LINUX
 
         plugins = VOLATILITY_PLUGINS_WINDOWS if os_type == "windows" else VOLATILITY_PLUGINS_LINUX
         self._results.clear()
 
-        for plugin in plugins:
+        total = len(plugins)
+        for idx, plugin in enumerate(plugins, start=1):
+            if progress_callback:
+                progress_callback(idx - 1, total, plugin, "starting")
             result = self.run_plugin(plugin, file_path)
             self._results[plugin] = result
+            if progress_callback:
+                progress_callback(idx, total, plugin, "completed")
 
         return self._results
 

@@ -1,8 +1,42 @@
 """VolatileAI — Home / Evidence Loader page."""
 
+import time
+from html import escape
+
 import streamlit as st
-from ui.components.metrics import page_header, info_banner, stat_card
-from core.volatility_engine import VolatilityEngine, PluginResult
+from ui.components.metrics import info_banner
+
+
+def _render_evidence_details(evidence):
+    if not evidence:
+        return
+
+    st.markdown(
+        (
+            f"<div style='background:#0f172a;border:1px solid #1e293b;border-radius:12px;"
+            f"padding:1rem 1.2rem;margin-top:0.8rem;margin-bottom:0.8rem'>"
+            f"<div style='font-weight:700;color:#38bdf8;margin-bottom:10px;font-size:0.95rem'>"
+            f"Evidence Details"
+            f"</div>"
+            f"<div style='display:grid;grid-template-columns:minmax(120px,180px) 1fr;gap:8px 14px;"
+            f"color:#e2e8f0;font-size:0.86rem;align-items:start'>"
+            f"<div style='color:#64748b'>Filename</div>"
+            f"<div style='font-weight:600;overflow-wrap:anywhere'>{escape(evidence.filename)}</div>"
+            f"<div style='color:#64748b'>Size</div>"
+            f"<div>{escape(evidence.size_human)}</div>"
+            f"<div style='color:#64748b'>Format</div>"
+            f"<div><code>{escape(evidence.format)}</code></div>"
+            f"<div style='color:#64748b'>MD5</div>"
+            f"<div style='font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",monospace;"
+            f"font-size:0.78rem;overflow-wrap:anywhere;word-break:break-word'>{escape(evidence.md5)}</div>"
+            f"<div style='color:#64748b'>SHA-256</div>"
+            f"<div style='font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",monospace;"
+            f"font-size:0.78rem;overflow-wrap:anywhere;word-break:break-word'>{escape(evidence.sha256)}</div>"
+            f"</div>"
+            f"</div>"
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 def _render_hero():
@@ -28,32 +62,10 @@ def _render_hero():
     """, unsafe_allow_html=True)
 
 
-def _load_demo_scenario(scenario_id: str, scenario: dict):
-    plugin_data = st.session_state.scenario_loader.get_plugin_data(scenario_id)
-    plugin_results = {}
-    for plugin_name, data in plugin_data.items():
-        plugin_results[plugin_name] = PluginResult(
-            plugin_name=plugin_name, success=True, data=data, row_count=len(data)
-        )
-    st.session_state.plugin_results = plugin_results
-    st.session_state.findings = st.session_state.detector.analyze_all(plugin_results)
-    st.session_state.evidence_loaded = True
-    st.session_state.current_scenario = scenario_id
-    st.session_state.analysis_complete = True
-
-    findings_text = "\n".join(
-        f"- [{f.risk_level.upper()}] {f.title}: {f.description}"
-        for f in st.session_state.findings[:20]
-    )
-    st.session_state.ai_engine.set_context(
-        findings_text, f"Scenario: {scenario['name']}"
-    )
-
-
 def _render_evidence_loader():
     st.markdown(
         "<h3 style='color:#f1f5f9;font-weight:700;margin-bottom:0.4rem'>"
-        "📂 Load Evidence File</h3>",
+        "Load Evidence File</h3>",
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -62,16 +74,48 @@ def _render_evidence_loader():
         unsafe_allow_html=True,
     )
 
+    if "evidence_file_path" not in st.session_state:
+        st.session_state.evidence_file_path = ""
+
     file_path = st.text_input(
         "Evidence file path",
         placeholder="/path/to/memory.raw",
+        key="evidence_file_path",
         label_visibility="collapsed",
     )
 
-    if st.button("Validate & Load", type="primary", width="stretch"):
+    if st.session_state.get("evidence_loaded"):
+        clear_col, _ = st.columns([1, 3])
+        with clear_col:
+            if st.button("Clear Current", width="stretch"):
+                st.session_state.evidence_loaded = False
+                st.session_state.evidence_info = None
+                st.session_state.plugin_results = {}
+                st.session_state.findings = []
+                st.session_state.analysis_complete = False
+                st.session_state.current_scenario = None
+                st.session_state.chat_history = []
+                st.rerun()
+
+    if not st.session_state.vol_engine.is_volatility_available:
+        info_banner(
+            "Volatility 3 is not installed in this environment. Run ./setup.sh to install dependencies, including volatility3.",
+            "warning",
+        )
+
+    load_clicked = st.button("Validate & Load", type="primary", width="stretch")
+
+    if load_clicked:
         if not file_path or not file_path.strip():
             st.warning("Please enter a file path first.")
             return
+
+        # Reuse the same app instance for new evidence without restarting Streamlit.
+        st.session_state.plugin_results = {}
+        st.session_state.findings = []
+        st.session_state.analysis_complete = False
+        st.session_state.current_scenario = None
+        st.session_state.chat_history = []
 
         with st.spinner("Validating evidence file…"):
             evidence = st.session_state.vol_engine.validate_evidence(file_path.strip())
@@ -81,33 +125,78 @@ def _render_evidence_loader():
                      f"format `{evidence.format}` is not supported or file not found.")
             return
 
+        st.session_state.evidence_info = evidence
+
         st.markdown(
-            f"""
-            <div style='background:#0f172a;border:1px solid #1e293b;border-radius:12px;
-                padding:1rem 1.2rem;margin-top:0.8rem'>
-                <div style='font-weight:700;color:#38bdf8;margin-bottom:8px;font-size:0.95rem'>
-                    Evidence Details
-                </div>
-                <table style='width:100%;color:#e2e8f0;font-size:0.85rem'>
-                    <tr><td style='color:#64748b;padding:3px 0'>Filename</td>
-                        <td style='text-align:right'>{evidence.filename}</td></tr>
-                    <tr><td style='color:#64748b;padding:3px 0'>Size</td>
-                        <td style='text-align:right'>{evidence.size_human}</td></tr>
-                    <tr><td style='color:#64748b;padding:3px 0'>Format</td>
-                        <td style='text-align:right'><code>{evidence.format}</code></td></tr>
-                    <tr><td style='color:#64748b;padding:3px 0'>MD5</td>
-                        <td style='text-align:right;font-family:monospace;font-size:0.75rem'>
-                            {evidence.md5}</td></tr>
-                    <tr><td style='color:#64748b;padding:3px 0'>SHA-256</td>
-                        <td style='text-align:right;font-family:monospace;font-size:0.75rem'>
-                            {evidence.sha256}</td></tr>
-                </table>
-            </div>""",
+            """
+            <style>
+            .va-loader-wrap { margin: 0.35rem 0 0.65rem 0; }
+            .va-loader { display:flex; gap:6px; align-items:center; }
+            .va-dot { width:8px; height:8px; border-radius:50%; background:#38bdf8; opacity:0.35;
+                      animation: vaPulse 1.15s infinite ease-in-out; }
+            .va-dot:nth-child(2) { animation-delay: 0.18s; }
+            .va-dot:nth-child(3) { animation-delay: 0.36s; }
+            @keyframes vaPulse {
+                0%, 80%, 100% { transform: scale(0.85); opacity: 0.28; }
+                40% { transform: scale(1.15); opacity: 1; }
+            }
+            </style>
+            """,
             unsafe_allow_html=True,
         )
 
-        with st.spinner("Running Volatility plugins — this may take a few minutes…"):
-            plugin_results = st.session_state.vol_engine.run_all_plugins(file_path.strip())
+        loader_box = st.empty()
+        loader_box.markdown(
+            """
+            <div class='va-loader-wrap'>
+              <div style='color:#94a3b8;font-size:0.83rem;margin-bottom:6px'>Running Volatility plugins</div>
+              <div class='va-loader'>
+                <div class='va-dot'></div><div class='va-dot'></div><div class='va-dot'></div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        progress = st.progress(0, text="Starting plugin execution…")
+        status = st.empty()
+        started_at = time.time()
+
+        def _on_progress(done: int, total: int, plugin_name: str, phase: str):
+            pct = int((done / max(total, 1)) * 100)
+            elapsed = max(time.time() - started_at, 0.01)
+            avg_per_plugin = elapsed / max(done, 1)
+            remaining = max(total - done, 0)
+            eta_sec = int(avg_per_plugin * remaining)
+
+            if phase == "starting":
+                status.markdown(
+                    f"<div style='color:#94a3b8;font-size:0.82rem'>"
+                    f"[{done + 1}/{total}] Starting <code>{escape(plugin_name)}</code>…"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                progress.progress(min(pct, 99), text=f"Plugin progress: {pct}%")
+            else:
+                status.markdown(
+                    f"<div style='color:#94a3b8;font-size:0.82rem'>"
+                    f"[{done}/{total}] Completed <code>{escape(plugin_name)}</code>"
+                    f" · ETA ~ {eta_sec}s"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                progress.progress(pct, text=f"Plugin progress: {pct}%")
+
+        plugin_results = st.session_state.vol_engine.run_all_plugins(
+            file_path.strip(),
+            progress_callback=_on_progress,
+        )
+        loader_box.empty()
+        progress.progress(100, text="Plugin progress: 100%")
+        status.markdown(
+            "<div style='color:#22c55e;font-size:0.82rem'>Plugin execution completed.</div>",
+            unsafe_allow_html=True,
+        )
 
         success_count = sum(1 for result in plugin_results.values() if result.success)
         non_empty_count = sum(1 for result in plugin_results.values() if result.success and result.row_count > 0)
@@ -155,60 +244,6 @@ def _render_evidence_loader():
             info_banner("Evidence loaded and analysis complete! Head to the Dashboard to review findings.", "success")
 
 
-def _render_demo_scenarios():
-    st.markdown(
-        "<h3 style='color:#f1f5f9;font-weight:700;margin-bottom:0.4rem'>"
-        "🧪 Demo Scenarios</h3>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "<p style='color:#64748b;font-size:0.85rem;margin-bottom:1rem'>"
-        "Use curated scenarios if you want an instant walkthrough without a live dump.</p>",
-        unsafe_allow_html=True,
-    )
-
-    scenarios = st.session_state.scenario_loader.list_scenarios()
-
-    if not scenarios:
-        st.info("No demo scenarios found. Add scenario JSON files to the demo directory.")
-        return
-
-    for scenario in scenarios:
-        sid = scenario["id"]
-        st.markdown(
-            f"""
-            <div style='background:#0f172a;border:1px solid #1e293b;border-radius:12px;
-                padding:0.9rem 1.1rem;margin-bottom:0.7rem;
-                box-shadow:0 2px 8px rgba(0,0,0,0.18)'>
-                <div style='font-weight:700;color:#f1f5f9;font-size:0.95rem'>
-                    {scenario['name']}
-                </div>
-                <div style='color:#94a3b8;font-size:0.82rem;margin-top:4px;line-height:1.5'>
-                    {scenario.get('description', 'No description available.')}
-                </div>
-                <div style='margin-top:6px'>
-                    <span style='background:#1e293b;color:#818cf8;padding:2px 8px;
-                        border-radius:4px;font-size:0.7rem;font-family:monospace'>
-                        {scenario.get('os', 'windows').upper()}
-                    </span>
-                </div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-        if st.button(
-            f"Load Scenario",
-            key=f"load_{sid}",
-            width="stretch",
-        ):
-            with st.spinner(f"Loading **{scenario['name']}**…"):
-                _load_demo_scenario(sid, scenario)
-            info_banner(
-                f"Scenario \"{scenario['name']}\" loaded with "
-                f"{len(st.session_state.findings)} findings. Go to the Dashboard to explore!",
-                "success",
-            )
-
-
 def render_home():
     _render_hero()
 
@@ -219,10 +254,8 @@ def render_home():
         )
         st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
-    col_left, col_right = st.columns([1, 1], gap="large")
+    # Keep evidence metadata visible across reruns and tab switches.
+    if st.session_state.get("evidence_info"):
+        _render_evidence_details(st.session_state.evidence_info)
 
-    with col_left:
-        _render_evidence_loader()
-
-    with col_right:
-        _render_demo_scenarios()
+    _render_evidence_loader()

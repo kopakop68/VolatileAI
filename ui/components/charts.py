@@ -183,27 +183,69 @@ def create_timeline(events: List[Dict]) -> go.Figure:
     cat_colors = {"process": "#38bdf8", "network": "#818cf8", "injection": "#ef4444",
                   "dll": "#f97316", "persistence": "#ec4899", "service": "#06b6d4"}
 
-    fig = go.Figure()
-    for i, evt in enumerate(events):
-        color = cat_colors.get(evt.get("category", ""), "#94a3b8")
-        risk = evt.get("risk_score", 0)
-        size = 8 + risk * 2
+    categories = sorted({str(e.get("category", "unknown")).lower() for e in events})
+    cat_to_index = {cat: idx for idx, cat in enumerate(categories)}
+    jitter_pattern = [-0.24, -0.12, 0.0, 0.12, 0.24]
+    per_category_count: Dict[str, int] = {cat: 0 for cat in categories}
 
-        fig.add_trace(go.Scatter(
-            x=[evt.get("timestamp", "")], y=[evt.get("category", "").capitalize()],
-            mode="markers+text",
-            marker=dict(size=size, color=color, symbol="circle",
-                        line=dict(width=1, color="#0f172a")),
-            text=[evt.get("title", "")[:30]], textposition="top center",
-            textfont=dict(size=8, color="#94a3b8"),
-            hovertemplate=f"<b>{evt.get('title','')}</b><br>Time: {evt.get('timestamp','')}<br>Risk: {risk:.1f}<extra></extra>",
+    xs = []
+    ys = []
+    sizes = []
+    colors = []
+    hover_titles = []
+    hover_times = []
+    hover_risks = []
+    hover_categories = []
+
+    for evt in events:
+        category = str(evt.get("category", "unknown")).lower()
+        cat_idx = cat_to_index.get(category, 0)
+        offset_idx = per_category_count.get(category, 0) % len(jitter_pattern)
+        per_category_count[category] = per_category_count.get(category, 0) + 1
+
+        risk = float(evt.get("risk_score", 0) or 0)
+        size = max(8, min(26, 8 + risk * 1.8))
+
+        xs.append(str(evt.get("timestamp", "")))
+        ys.append(cat_idx + jitter_pattern[offset_idx])
+        sizes.append(size)
+        colors.append(cat_colors.get(category, "#94a3b8"))
+        hover_titles.append(str(evt.get("title", "")))
+        hover_times.append(str(evt.get("timestamp", "")))
+        hover_risks.append(risk)
+        hover_categories.append(category.capitalize())
+
+    fig = go.Figure(
+        go.Scatter(
+            x=xs,
+            y=ys,
+            mode="markers",
+            marker=dict(
+                size=sizes,
+                color=colors,
+                opacity=0.88,
+                line=dict(width=1, color="#0f172a"),
+            ),
+            customdata=list(zip(hover_titles, hover_times, hover_risks, hover_categories)),
+            hovertemplate="<b>%{customdata[0]}</b><br>Time: %{customdata[1]}<br>Category: %{customdata[3]}<br>Risk: %{customdata[2]:.1f}<extra></extra>",
             showlegend=False,
-        ))
+        )
+    )
 
-    fig.update_layout(**DARK_LAYOUT, height=350,
+    fig.update_layout(
+        **DARK_LAYOUT,
+        height=max(380, 180 + len(categories) * 70),
         title=dict(text="Attack Timeline", font=dict(size=15)),
         xaxis=dict(title="Time", gridcolor="#1e293b"),
-        yaxis=dict(gridcolor="#1e293b"))
+        yaxis=dict(
+            title="Category",
+            gridcolor="#1e293b",
+            tickmode="array",
+            tickvals=list(range(len(categories))),
+            ticktext=[c.capitalize() for c in categories],
+            zeroline=False,
+        ),
+    )
     return fig
 
 

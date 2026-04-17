@@ -7,7 +7,7 @@ from ui.components.charts import create_network_graph
 
 
 def render_network_analysis():
-    page_header("Network Analysis", subtitle="Explore network connections, remote endpoints, and suspicious traffic", icon="🌐")
+    page_header("Network Analysis", subtitle="Explore network connections, remote endpoints, and suspicious traffic", icon="")
 
     if not st.session_state.get("evidence_loaded"):
         info_banner("Load a memory image from the sidebar to begin network analysis.")
@@ -37,17 +37,17 @@ def render_network_analysis():
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        stat_card("Total Connections", len(connections), color="#38bdf8", icon="🔗")
+        stat_card("Total Connections", len(connections), color="#38bdf8")
     with c2:
-        stat_card("Unique Remote IPs", len(remote_ips), color="#818cf8", icon="🌍")
+        stat_card("Unique Remote IPs", len(remote_ips), color="#818cf8")
     with c3:
-        stat_card("Suspicious", len(network_findings), color="#ef4444", icon="🚨")
+        stat_card("Suspicious", len(network_findings), color="#ef4444")
     with c4:
-        stat_card("Unique Ports", len(unique_ports), color="#f97316", icon="🔌")
+        stat_card("Unique Ports", len(unique_ports), color="#f97316")
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
-    tab_graph, tab_details = st.tabs(["🕸️ Network Graph", "📋 Connection Details"])
+    tab_graph, tab_details = st.tabs(["Network Graph", "Connection Details"])
 
     with tab_graph:
         fig = create_network_graph(connections)
@@ -89,14 +89,14 @@ def render_network_analysis():
                 all_pids.add(str(pid))
 
             rows.append({
-                "Protocol": proto,
-                "Local Address": local_addr,
-                "Local Port": local_port,
-                "Remote Address": remote_addr,
-                "Remote Port": remote_port,
-                "State": state,
-                "PID": pid,
-                "Owner": owner,
+                "Protocol": str(proto),
+                "Local Address": str(local_addr),
+                "Local Port": "" if local_port is None else str(local_port),
+                "Remote Address": str(remote_addr),
+                "Remote Port": "" if remote_port is None else str(remote_port),
+                "State": str(state),
+                "PID": "" if pid is None else str(pid),
+                "Owner": str(owner),
             })
 
         df = pd.DataFrame(rows)
@@ -147,7 +147,7 @@ def render_network_analysis():
         )
 
         st.markdown("---")
-        st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>🚨 Suspicious Connections</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>Suspicious Connections</h4>", unsafe_allow_html=True)
 
         if not network_findings:
             info_banner("No suspicious network activity detected.", type_="success")
@@ -158,6 +158,6 @@ def render_network_analysis():
                     description=finding.description,
                     risk_score=finding.risk_score,
                     category=finding.category,
-                    techniques=getattr(finding, "techniques", []),
+                    techniques=finding.mitre_techniques,
                     evidence_id=finding.artifact_id,
                 )

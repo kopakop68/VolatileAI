@@ -6,7 +6,7 @@ from ui.components.metrics import page_header, info_banner, stat_card
 
 
 def render_ioc_summary():
-    page_header("IOC Summary", subtitle="Indicators of Compromise extracted from memory analysis", icon="🔍")
+    page_header("IOC Summary", subtitle="Indicators of Compromise extracted from memory analysis", icon="")
 
     if not st.session_state.get("evidence_loaded"):
         info_banner("Load a memory image from the Home page to view IOC summary.")
@@ -38,7 +38,6 @@ def render_ioc_summary():
             if port and port != "0":
                 suspicious_ports.add(port)
         elif f.category in ("process", "injection"):
-            f.artifact_id.replace("PID:", "").strip()
             suspicious_processes.add(f.title)
             process_scores[f.title] = f.risk_score
         elif f.category == "persistence":
@@ -50,22 +49,22 @@ def render_ioc_summary():
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        stat_card("Total IOCs", total_iocs, color="#c084fc", icon="🎯")
+        stat_card("Total IOCs", total_iocs, color="#c084fc")
     with c2:
-        stat_card("Suspicious IPs", len(suspicious_ips), color="#ef4444", icon="🌐")
+        stat_card("Suspicious IPs", len(suspicious_ips), color="#ef4444")
     with c3:
-        stat_card("Suspicious Processes", len(suspicious_processes), color="#f97316", icon="⚙️")
+        stat_card("Suspicious Processes", len(suspicious_processes), color="#f97316")
     with c4:
-        stat_card("MITRE Techniques", len(mitre_techniques), color="#38bdf8", icon="🛡️")
+        stat_card("MITRE Techniques", len(mitre_techniques), color="#38bdf8")
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
     tab_ips, tab_procs, tab_ports, tab_svcs, tab_mitre = st.tabs([
-        "🌐 IP Addresses",
-        "⚙️ Processes",
-        "🔌 Network Ports",
-        "🔁 Services",
-        "🛡️ MITRE Techniques",
+        "IP Addresses",
+        "Processes",
+        "Network Ports",
+        "Services",
+        "MITRE Techniques",
     ])
 
     with tab_ips:
@@ -87,7 +86,7 @@ def render_ioc_summary():
                 c = colors.get(val, "#94a3b8")
                 return f"color: {c}; font-weight: 700"
 
-            styled = df.style.applymap(_color_risk, subset=["Risk Level"])
+            styled = df.style.map(_color_risk, subset=["Risk Level"])
             st.dataframe(styled, width="stretch", hide_index=True)
         else:
             info_banner("No suspicious external IP addresses detected.", type_="success")
@@ -106,7 +105,7 @@ def render_ioc_summary():
                 c = colors.get(val, "#94a3b8")
                 return f"color: {c}; font-weight: 700"
 
-            styled = df.style.applymap(_color_risk, subset=["Risk Level"])
+            styled = df.style.map(_color_risk, subset=["Risk Level"])
             st.dataframe(styled, width="stretch", hide_index=True)
         else:
             info_banner("No suspicious processes detected.", type_="success")
@@ -132,7 +131,7 @@ def render_ioc_summary():
                     f"<div style='background:#0f172a;border:1px solid #1e293b;border-left:3px solid #818cf8;"
                     f"border-radius:8px;padding:0.5rem 1rem;margin-bottom:0.4rem;"
                     f"color:#c4b5fd;font-size:0.9rem'>"
-                    f"🔁 {svc}</div>",
+                    f"{svc}</div>",
                     unsafe_allow_html=True,
                 )
         else:
@@ -154,7 +153,7 @@ def render_ioc_summary():
             info_banner("No MITRE ATT&CK techniques mapped.", type_="info")
 
     st.markdown("---")
-    st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>📋 Export IOCs</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>Export IOCs</h4>", unsafe_allow_html=True)
 
     export_lines = []
     if suspicious_ips:
@@ -181,7 +180,7 @@ def render_ioc_summary():
     st.text_area("IOC List (copy below)", value=export_text, height=220, label_visibility="collapsed")
 
     st.markdown("---")
-    st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>🤖 AI-Generated IOC Analysis</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>AI-Generated IOC Analysis</h4>", unsafe_allow_html=True)
 
     scenario_id = st.session_state.get("current_scenario", "") or ""
     ai_iocs = st.session_state.ai_engine.get_ioc_list(scenario_id)

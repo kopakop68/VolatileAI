@@ -169,6 +169,10 @@ When answering questions:
 - Provide confidence levels for your assessments
 - Suggest follow-up investigation steps
 - Be thorough but concise
+- Avoid false positives: do not label activity as confirmed malicious unless at least two independent indicators support it
+- If evidence is weak or ambiguous, explicitly mark it as "suspicious" or "possible" rather than "confirmed"
+- Mention plausible benign explanations when relevant
+- Prioritize high-confidence findings and clearly separate them from low-confidence hypotheses
 """
 
     def ask(self, question: str, scenario_id: str = "") -> str:

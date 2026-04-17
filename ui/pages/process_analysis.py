@@ -25,7 +25,7 @@ def _has_suspicious_parent(name: str, ppid: int, pid_map: dict) -> bool:
 
 
 def render_process_analysis():
-    page_header("Process Analysis", subtitle="Inspect running processes, parent relationships, and suspicious behavior", icon="⚙️")
+    page_header("Process Analysis", subtitle="Inspect running processes, parent relationships, and suspicious behavior", icon="")
 
     if not st.session_state.get("evidence_loaded"):
         info_banner("Load a memory image from the sidebar to begin process analysis.")
@@ -65,7 +65,7 @@ def render_process_analysis():
         if f.category == "process"
     }
 
-    tab_tree, tab_details = st.tabs(["🌳 Process Tree", "📋 Process Details"])
+    tab_tree, tab_details = st.tabs(["Process Tree", "Process Details"])
 
     with tab_tree:
         for p in processes:
@@ -93,12 +93,12 @@ def render_process_analysis():
             threads = p.get("Threads") or p.get("threads") or ""
             handles = p.get("Handles") or p.get("handles") or ""
             rows.append({
-                "PID": pid,
-                "PPID": ppid,
-                "Name": name,
+                "PID": "" if pid is None else str(pid),
+                "PPID": "" if ppid is None else str(ppid),
+                "Name": str(name),
                 "Create Time": str(create_time),
-                "Threads": threads,
-                "Handles": handles,
+                "Threads": "" if threads is None else str(threads),
+                "Handles": "" if handles is None else str(handles),
             })
 
         df = pd.DataFrame(rows)
@@ -106,10 +106,11 @@ def render_process_analysis():
 
             def _highlight_suspicious(row):
                 name = str(row.get("Name", ""))
-                ppid = row.get("PPID")
+                ppid_raw = str(row.get("PPID", "")).strip()
+                ppid = int(ppid_raw) if ppid_raw.isdigit() else None
                 if ppid is not None and _has_suspicious_parent(name, ppid, pid_map):
                     return ["background-color: rgba(239,68,68,0.15); color: #fca5a5"] * len(row)
-                pid = row.get("PID")
+                pid = str(row.get("PID", "")).strip()
                 if f"PID:{pid}" in risk_scores and risk_scores[f"PID:{pid}"] >= 6:
                     return ["background-color: rgba(249,115,22,0.12); color: #fdba74"] * len(row)
                 return [""] * len(row)
@@ -118,7 +119,7 @@ def render_process_analysis():
             st.dataframe(styled_df, width="stretch", height=min(400, 40 + len(df) * 35))
 
         st.markdown("---")
-        st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>🚨 Suspicious Processes</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>Suspicious Processes</h4>", unsafe_allow_html=True)
 
         suspicious = [f for f in process_findings.values()]
         if not suspicious:
@@ -130,7 +131,7 @@ def render_process_analysis():
                     description=finding.description,
                     risk_score=finding.risk_score,
                     category=finding.category,
-                    techniques=getattr(finding, "techniques", []),
+                    techniques=finding.mitre_techniques,
                     evidence_id=finding.artifact_id,
                 )
 
@@ -166,7 +167,7 @@ def render_process_analysis():
 
         if flagged_parents:
             st.markdown("---")
-            st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>🔗 Unusual Parent-Child Relationships</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>Unusual Parent-Child Relationships</h4>", unsafe_allow_html=True)
             for fp in flagged_parents:
                 st.markdown(f"""
                 <div style='background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);
@@ -176,5 +177,5 @@ def render_process_analysis():
                     <span style='color:#94a3b8'> ← spawned by </span>
                     <span style='color:#fca5a5;font-weight:700'>{fp['parent_name']}</span>
                     <span style='color:#64748b'> (PID {fp['ppid']})</span>
-                    <span style='color:#ef4444;margin-left:8px;font-size:0.75rem'>⚠ Unexpected parent</span>
+                    <span style='color:#ef4444;margin-left:8px;font-size:0.75rem'>Unexpected parent</span>
                 </div>""", unsafe_allow_html=True)

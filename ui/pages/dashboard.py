@@ -9,12 +9,12 @@ def render_dashboard():
     page_header(
         "Investigation Dashboard",
         subtitle="Overview of anomalies, risk distribution, and critical findings",
-        icon="📊",
+        icon="",
     )
 
     if not st.session_state.get("evidence_loaded"):
         info_banner(
-            "No evidence loaded yet. Go to the Home page and load an evidence file or demo scenario first.",
+            "No evidence loaded yet. Go to the Home page and load an evidence file first.",
             "info",
         )
         return
@@ -33,13 +33,13 @@ def render_dashboard():
     # --- Top metrics ---
     m1, m2, m3, m4 = st.columns(4)
     with m1:
-        stat_card("Total Findings", total_findings, color="#38bdf8", icon="🔍")
+        stat_card("Total Findings", total_findings, color="#38bdf8")
     with m2:
-        stat_card("Critical", critical_count, color="#ef4444", icon="🚨")
+        stat_card("Critical", critical_count, color="#ef4444")
     with m3:
-        stat_card("MITRE Techniques", unique_techniques, color="#818cf8", icon="🗺️")
+        stat_card("MITRE Techniques", unique_techniques, color="#818cf8")
     with m4:
-        stat_card("Risk Score", f"{risk_score:.1f}", color="#f97316", icon="⚡")
+        stat_card("Risk Score", f"{risk_score:.1f}", color="#f97316")
 
     st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
 
@@ -71,7 +71,7 @@ def render_dashboard():
     # --- Top critical findings ---
     st.markdown(
         "<h4 style='color:#f1f5f9;font-weight:700;margin-bottom:0.5rem'>"
-        "🔴 Top Critical Findings</h4>",
+        "Top Critical Findings</h4>",
         unsafe_allow_html=True,
     )
 
@@ -110,13 +110,13 @@ def render_dashboard():
     # --- Priority actions ---
     st.markdown(
         "<h4 style='color:#f1f5f9;font-weight:700;margin-bottom:0.5rem'>"
-        "✅ Investigation Priorities</h4>",
+        "Investigation Priorities</h4>",
         unsafe_allow_html=True,
     )
 
     top_three = sorted(findings, key=lambda f: f.risk_score, reverse=True)[:3]
     if not top_three:
-        info_banner("No findings yet. Load evidence or a demo scenario to begin analysis.", "info")
+        info_banner("No findings yet. Load evidence to begin analysis.", "info")
         return
 
     actions = []

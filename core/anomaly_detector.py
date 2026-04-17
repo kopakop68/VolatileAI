@@ -79,6 +79,7 @@ class AnomalyDetector:
             offset = p.get("Offset") or p.get("offset") or ""
             process_map[pid] = {"name": name, "ppid": ppid, "raw": p}
 
+        instance_alerted = set()
         for pid, info in process_map.items():
             name = info["name"]
             ppid = info["ppid"]
@@ -92,12 +93,14 @@ class AnomalyDetector:
 
             count = sum(1 for p2 in process_map.values() if p2["name"] == name)
             expected = WINDOWS_SYSTEM_PROCESSES.get(name, {}).get("expected_instances", -1)
-            if expected > 0 and count > expected:
+            # Avoid flooding findings for common noisy multi-instance behavior.
+            if expected > 0 and count > (expected + 2) and name not in instance_alerted:
+                instance_alerted.add(name)
                 self.findings.append(Finding(
                     category="process", artifact_id=f"PID:{pid}",
                     title=f"Multiple instances of {name}",
                     description=f"Found {count} instances of {name}, expected {expected}. May indicate process masquerading.",
-                    risk_score=6.5, evidence=info["raw"],
+                    risk_score=5.8, evidence=info["raw"],
                     mitre_techniques=["T1036"],
                 ))
 
@@ -126,17 +129,23 @@ class AnomalyDetector:
                 category="process", artifact_id=f"PID:{pid}",
                 title=f"Suspicious parent-child: {parent_name} -> {name}",
                 description=f"{name} was spawned by {parent_name}, which commonly indicates malicious macro execution or exploit.",
-                risk_score=9.0, evidence=raw,
+                risk_score=8.2, evidence=raw,
                 mitre_techniques=["T1059", "T1204.002"],
             ))
 
         expected_parent = WINDOWS_SYSTEM_PROCESSES.get(name, {}).get("expected_parent", "")
-        if expected_parent and parent_name != expected_parent and name in WINDOWS_SYSTEM_PROCESSES:
+        if (
+            expected_parent
+            and parent_name not in ("", "unknown")
+            and expected_parent not in ("", "idle")
+            and parent_name != expected_parent
+            and name in WINDOWS_SYSTEM_PROCESSES
+        ):
             self.findings.append(Finding(
                 category="process", artifact_id=f"PID:{pid}",
                 title=f"{name} has unexpected parent: {parent_name}",
                 description=f"{name} should be child of {expected_parent}, but parent is {parent_name}.",
-                risk_score=7.0, evidence=raw,
+                risk_score=6.2, evidence=raw,
                 mitre_techniques=["T1036"],
             ))
 
@@ -221,12 +230,13 @@ class AnomalyDetector:
                 ))
 
         for ip, count in ip_connections.items():
-            if count >= 5:
+            # Require stronger beaconing signal to reduce benign chatty-host alerts.
+            if count >= 12:
                 self.findings.append(Finding(
                     category="network", artifact_id=f"IP:{ip}",
                     title=f"High-frequency connections to {ip}",
                     description=f"{count} connections to {ip} detected. May indicate C2 beaconing or data exfiltration.",
-                    risk_score=7.0 if count < 10 else 8.5,
+                    risk_score=6.2 if count < 20 else 8.0,
                     evidence={"ip": ip, "connection_count": count},
                     mitre_techniques=["T1071", "T1041"],
                 ))
