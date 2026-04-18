@@ -1,663 +1,830 @@
-# VolatileAI - Comprehensive Technical Documentation (Paper-Ready)
+# VolatileAI - Complete Technical Documentation
 
 Version: 1.0.0  
-Project Type: AI-assisted memory forensics platform  
-Primary Stack: Python, Streamlit, Volatility 3, Plotly, fpdf2
+Scope: Current live codebase (Windows-focused memory forensics)
 
 ---
 
-## 1. Abstract
+## 1) What VolatileAI Is
 
-VolatileAI is an interactive memory forensics investigation platform designed to convert raw memory artifacts into analyst-ready findings, ATT&CK mappings, and narrative reports. It combines three major layers:
+VolatileAI is an interactive memory-forensics application built with Streamlit. It orchestrates Volatility 3 plugin execution, applies deterministic heuristics to produce findings, maps findings to MITRE ATT&CK, supports AI-assisted analyst workflows, and generates PDF reports.
 
-1. Acquisition and parsing layer using Volatility 3 plugins.
-2. Deterministic heuristic detection layer for suspicious process, network, injection, DLL, and service activity.
-3. Analyst assistance layer using multi-provider LLM support (Ollama/OpenAI-compatible/Anthropic/Groq/OpenText-compatible) plus cached offline responses.
-
-The system is implemented as a Streamlit web application with modular page-based analysis, persistent session state, report export, and operational logging.
-
----
-
-## 2. Problem Statement and Motivation
-
-Memory forensics tools provide deep artifacts but require substantial analyst effort to correlate indicators and prioritize risk. Typical bottlenecks:
-
-1. Plugin output fragmentation across processes, sockets, command lines, and memory regions.
-2. High cognitive load in triage and attack-chain reconstruction.
-3. Repetitive report-writing effort for incident communication.
-4. Difficulty balancing detection sensitivity with false-positive control.
-
-VolatileAI addresses this by combining structured plugin execution, explainable heuristics, ATT&CK context, and AI-assisted interpretation.
+Core design goals:
+1. Evidence-first workflow (real memory dump path -> plugin run -> findings).
+2. Transparent, explainable detection logic (rule-based, scored findings).
+3. Analyst productivity (charts, filters, AI assistance, report export).
+4. Safe local-default runtime (localhost binding, environment-driven configuration).
 
 ---
 
-## 3. Project Goals
+## 2) End-to-End Runtime Flow
 
-1. Load and validate real memory dump files in a user-friendly UI.
-2. Execute a standard plugin suite and preserve plugin-level diagnostics.
-3. Detect suspicious behaviors with deterministic rules and risk scoring.
-4. Map findings to MITRE ATT&CK for strategic visibility.
-5. Provide analyst chat and auto-summary features with provider flexibility.
-6. Export professional reports for management and technical stakeholders.
-7. Maintain practical runtime operability (live logs, progress feedback, no restart required for new evidence).
-
----
-
-## 4. Current Repository Snapshot
-
-### 4.1 Top-level Files
-
-1. `app.py` - Streamlit entrypoint, session initialization, sidebar navigation, page routing.
-2. `config.py` - Canonical runtime configuration, env overrides, normalization/validation.
-3. `run.sh` - Runtime launcher with env autoload, localhost-safe binding, live logging.
-4. `setup.sh` - Environment bootstrap and dependency installation.
-5. `requirements.txt` - Python dependency pins/ranges.
-6. `.env.example` - User-editable runtime/provider template.
-7. `.gitignore` - Ignore venv, logs, local secrets, runtime artifacts.
-8. `README.md` - User-level setup and feature overview.
-9. `DOCUMENTATION.md` - This technical reference.
-10. `__init__.py` - Empty package marker.
-
-### 4.2 Core Modules (`core/`)
-
-1. `core/volatility_engine.py`
-2. `core/anomaly_detector.py`
-3. `core/mitre_mapper.py`
-4. `core/ai_engine.py`
-5. `core/scenario_loader.py`
-6. `core/__init__.py` (empty)
-
-### 4.3 UI Modules (`ui/`)
-
-1. `ui/pages/home.py`
-2. `ui/pages/dashboard.py`
-3. `ui/pages/process_analysis.py`
-4. `ui/pages/network_analysis.py`
-5. `ui/pages/mitre_page.py`
-6. `ui/pages/timeline_page.py`
-7. `ui/pages/ai_chat.py`
-8. `ui/pages/ioc_summary.py`
-9. `ui/pages/reports_page.py`
-10. `ui/components/charts.py`
-11. `ui/components/metrics.py`
-12. `ui/styles/theme.css`
-13. `ui/__init__.py`, `ui/pages/__init__.py`, `ui/components/__init__.py` (empty markers)
-
-### 4.4 Reporting
-
-1. `reports/report_generator.py`
-2. `reports/__init__.py` (empty)
-3. `reports/output/` (runtime-generated PDFs; currently empty)
-
-### 4.5 Runtime Config
-
-1. `.streamlit/config.toml` - dark theme, localhost bind, upload size limit, telemetry off.
-
-### 4.6 Data Directories (Current State)
-
-1. `evidence/` - currently empty.
-2. `logs/` - contains runtime log files from launches.
-
-Note: Demo scenario and cached AI response features are disabled.
+1. User starts the app with run.sh.
+2. app.py initializes engines in Streamlit session state.
+3. Home page validates evidence path and computes hashes.
+4. Home page starts background analysis thread.
+5. core/volatility_engine.py runs selected plugins and reports progress.
+6. core/anomaly_detector.py converts plugin output into ranked Finding objects.
+7. core/mitre_mapper.py transforms findings into ATT&CK summaries.
+8. UI pages render findings and derived KPIs/charts.
+9. core/ai_engine.py answers analyst prompts using configured provider.
+10. reports/report_generator.py builds downloadable PDF reports.
 
 ---
 
-## 5. System Architecture
+## 3) Repository Structure and File Roles
 
-## 5.1 High-level Layering
+### 3.1 Top-level files
 
-1. Presentation Layer (Streamlit UI pages/components)
-2. Analysis Layer (Volatility wrapper + heuristic detector + ATT&CK mapper)
-3. AI Layer (provider routing + context prompt + fallback cache)
-4. Reporting Layer (FPDF generator)
-5. Runtime Layer (shell scripts, environment variables, logs)
+- app.py
+  - Main Streamlit entrypoint.
+  - Initializes global session state and routes all pages.
 
-## 5.2 Main Runtime Sequence
+- config.py
+  - Canonical runtime configuration module.
+  - Parses environment variables, normalizes values, validates directories.
 
-1. `run.sh` activates venv, loads `.env`, starts Streamlit with line-buffered output.
-2. `app.py` initializes singleton-like engines in `st.session_state`.
-3. User loads evidence in Home page.
-4. `VolatilityEngine` validates file and executes plugins.
-5. `AnomalyDetector` converts plugin output into ranked `Finding` objects.
-6. `MitreMapper` structures ATT&CK technique/tactic data.
-7. UI pages consume shared session state for visualization and analysis.
-8. `AIEngine` answers investigation prompts from configured provider or cache.
-9. `ReportGenerator` produces downloadable PDF reports.
+- run.sh
+  - Runtime launcher.
+  - Activates venv, loads .env, starts Streamlit with live log tee.
 
----
+- setup.sh
+  - Setup bootstrap.
+  - Creates venv, installs dependencies, creates runtime directories.
 
-## 6. Runtime Entry and Control Scripts
+- requirements.txt
+  - Python dependencies.
 
-## 6.1 `run.sh`
+- README.md
+  - User-facing setup and usage guidance.
 
-Responsibilities:
+- DOCUMENTATION.md
+  - This technical reference.
 
-1. Activates project venv.
-2. Sets `PYTHONPATH` to project root.
-3. Loads `.env` automatically if present.
-4. Creates timestamped log file in `logs/`.
-5. Uses `stdbuf -oL -eL` + `tee` to keep logs live in terminal and persisted to disk.
-6. Defaults Streamlit bind to localhost (`127.0.0.1`) for safer local execution.
+- .env.example
+  - Template environment file for provider/runtime settings.
 
-Operational behavior:
+- .streamlit/config.toml
+  - Streamlit server/theme defaults.
 
-1. If port is busy, Streamlit exits and logs the reason.
-2. All startup/runtime output is mirrored to `logs/volatileai_YYYYMMDD_HHMMSS.log`.
+- __init__.py
+  - Package marker (no runtime logic).
 
-## 6.2 `setup.sh`
+- .gitignore
+  - Ignore rules for secrets, venv, build/runtime artifacts.
 
-Responsibilities:
+### 3.2 Core directory
 
-1. Creates venv if missing.
-2. Installs dependencies from `requirements.txt` (preferred path).
-3. Fallback install command includes `volatility3` explicitly.
-4. Creates required runtime directories (`reports/output`, `evidence`, `logs`, `data/*`).
-5. Prints warning if `vol` CLI is not detected after install.
+- core/volatility_engine.py
+- core/anomaly_detector.py
+- core/mitre_mapper.py
+- core/ai_engine.py
+- core/scenario_loader.py
+- core/__init__.py (package marker)
 
----
+### 3.3 UI directory
 
-## 7. Configuration System (`config.py`)
+- ui/pages/home.py
+- ui/pages/dashboard.py
+- ui/pages/process_analysis.py
+- ui/pages/network_analysis.py
+- ui/pages/mitre_page.py
+- ui/pages/timeline_page.py
+- ui/pages/ai_chat.py
+- ui/pages/ioc_summary.py
+- ui/pages/reports_page.py
+- ui/components/charts.py
+- ui/components/metrics.py
+- ui/styles/theme.css
+- ui/__init__.py, ui/pages/__init__.py, ui/components/__init__.py (package markers)
 
-`config.py` is not a flat constant file; it is a normalization/validation pipeline.
+### 3.4 Reports
 
-## 7.1 Environment Parsing Helpers
+- reports/report_generator.py
+- reports/__init__.py (package marker)
+- reports/output/ (generated PDFs)
 
-1. `_env_str`, `_env_int`, `_env_csv`
-2. `_normalize_supported_formats`, `_normalize_plugin_list`
-3. `_normalize_ai_provider`, `_normalize_ollama_url`
-4. `_normalize_windows_processes`, `_normalize_map_of_string_lists`
-5. `_normalize_homoglyph_map`, `_normalize_risk_levels`
+### 3.5 Runtime directories
 
-## 7.2 Key Runtime Variables
-
-1. Paths: `EVIDENCE_DIR`, `REPORTS_DIR`.
-2. AI provider: `VOLATILEAI_AI_PROVIDER` with allowed values `ollama`, `openai`, `anthropic`, `groq`, `opentext`.
-3. Provider credentials and model selection.
-4. Plugin lists for Windows/Linux.
-5. Risk color/threshold definitions.
-6. Detection baselines: suspicious parents, ports, homoglyph map.
-
-## 7.3 Validation Lifecycle
-
-At import time:
-
-1. `_apply_environment_overrides()`
-2. `validate_and_normalize_config()`
-
-This ensures all directories exist and values are safe/consistent before runtime usage.
+- evidence/ (user-supplied memory files)
+- logs/ (launcher/runtime logs)
 
 ---
 
-## 8. Application Shell (`app.py`)
+## 4) Runtime Scripts and Environment
 
-## 8.1 Session State Initialization
+## 4.1 run.sh
 
-`init_session_state()` stores long-lived runtime objects:
+Purpose:
+1. Activates venv and sets PYTHONPATH.
+2. Loads .env if present.
+3. Creates logs/ and timestamped log file.
+4. Starts Streamlit with localhost-safe defaults.
 
-1. `vol_engine`
-2. `detector`
-3. `mitre_mapper`
-4. `ai_engine`
-5. `scenario_loader`
+Important behavior:
+1. Default bind: 127.0.0.1.
+2. Default port: 8502.
+3. Uses stdbuf + tee for line-buffered live logs and persisted logs.
 
-and analysis state:
+## 4.2 setup.sh
 
-1. `evidence_loaded`
-2. `evidence_info`
-3. `current_scenario`
-4. `findings`
-5. `plugin_results`
-6. `analysis_complete`
-7. `chat_history`
+Purpose:
+1. Create venv (if missing).
+2. Install dependencies from requirements.txt.
+3. Create required directories (reports/output, evidence, logs).
+4. Warn if vol CLI is not found.
 
-## 8.2 Sidebar and Routing
+## 4.3 .env.example
 
-Sidebar includes:
+Defines runtime options for:
+1. AI provider selection (ollama/openai/anthropic/groq/opentext).
+2. Per-provider base URL, API key, and model.
+3. Global AI timeout.
 
-1. app branding/version
-2. radio navigation across 9 pages
-3. system status lines (Volatility readiness, AI provider message, evidence state)
+## 4.4 .streamlit/config.toml
 
-Routing is simple and explicit via page label matching.
-
----
-
-## 9. Core Analysis Modules
-
-## 9.1 `core/volatility_engine.py`
-
-### Data models
-
-1. `EvidenceFile`
-2. `PluginResult`
-
-### Important methods
-
-1. `_check_volatility()` checks `vol --help` first, then Python module fallback.
-2. `validate_evidence()` validates existence, extension, computes MD5/SHA-256.
-3. `run_plugin()` executes plugin with JSON output, logs progress lines, handles timeout/parse failures.
-4. `run_all_plugins()` executes configured plugin set and supports `progress_callback(done, total, plugin, phase)`.
-5. `load_demo_results()` adapts static scenario JSON to `PluginResult` format.
-
-### Recent behavior
-
-1. Live plugin logging integrated (`[VolatilityEngine HH:MM:SS] ...`).
-2. Plugin-level progress callback now used by UI for progress bar and ETA.
-
-## 9.2 `core/anomaly_detector.py`
-
-Defines `Finding` and orchestrates rule-based analysis.
-
-Categories:
-
-1. process
-2. network
-3. injection
-4. dll
-5. persistence
-
-Pipeline:
-
-1. `_analyze_processes`
-2. `_analyze_network`
-3. `_analyze_injections`
-4. `_analyze_dlls`
-5. `_analyze_services`
-
-Notable rules:
-
-1. suspicious parent-child process chains
-2. system process path anomalies
-3. homoglyph masquerading
-4. suspicious command-line regex indicators
-5. suspicious/listening ports
-6. malfind-based injection severity boosts
-7. DLL load path anomalies
-8. service binary and interpreter misuse
-
-False-positive reductions currently implemented:
-
-1. process instance anomaly requires larger overage (`expected + 2`) and deduplicates alert per process name.
-2. expected-parent anomaly suppresses unknown/idle noise and uses lower severity.
-3. high-frequency network alert requires stronger threshold (`count >= 12`).
-
-## 9.3 `core/mitre_mapper.py`
-
-1. Hardcoded ATT&CK technique knowledge base via `MitreTechnique` dataclass.
-2. `map_findings()` groups findings by technique ID.
-3. `get_tactic_heatmap_data()` returns tactic-wise structures for bubble heatmap.
-4. `get_detected_techniques()` returns sorted technique summaries with severity/count.
-5. `get_unique_tactics()` for KPI usage.
-
-## 9.4 `core/ai_engine.py`
-
-### Provider model
-
-1. runtime provider selected from env-driven `AI_PROVIDER`.
-2. connectivity checked per provider.
-3. model labels and provider status exposed to UI.
-
-### Routing
-
-`ask()` resolution order:
-
-1. exact cache key match
-2. fuzzy cache match (Jaccard-like overlap threshold)
-3. live provider query
-4. fallback guidance string
-
-### Provider implementations
-
-1. Ollama generate endpoint
-2. OpenAI-compatible chat completions (OpenAI/Groq/OpenText-compatible)
-3. Anthropic messages API
-
-### Context policy and false-positive control
-
-`set_context()` injects instructions that now explicitly:
-
-1. discourage confirmed-malicious claims without multiple independent indicators
-2. require confidence framing for weak evidence
-3. separate high-confidence vs low-confidence hypotheses
-
-This affects local and remote providers equally because all route through shared context construction.
-
-## 9.5 `core/scenario_loader.py`
-
-1. Scenario loader is disabled and returns no synthetic scenario data.
-2. Timeline helper methods remain available for real finding/event composition.
+Controls:
+1. Theme colors and dark mode defaults.
+2. Server bind, port, and max upload size.
+3. Usage telemetry setting.
 
 ---
 
-## 10. UI Pages (`ui/pages`)
+## 5) app.py (Application Shell)
 
-## 10.1 `home.py`
+Functions:
 
-Primary operational page.
+1. init_session_state()
+- Creates/stores long-lived engine objects in st.session_state.
+- Initializes analysis state keys and synchronization lock.
 
-Responsibilities:
+2. load_css()
+- Loads ui/styles/theme.css into Streamlit app if file exists.
 
-1. render hero section
-2. validate and load memory dump path
-3. maintain evidence details card across reruns/tab switches
-4. reset current analysis (`Clear Current`) without server restart
-5. show animated loading indicator during plugin run
-6. show real plugin progress percentage + current plugin + ETA
-7. clear loader animation after completion
-8. summarize plugin success count and row-return count
-9. show plugin error expander
-10. handoff findings context to AI engine
+3. main()
+- Sets Streamlit page config.
+- Calls init_session_state() and global completed-analysis apply hook.
+- Renders sidebar status and navigation.
+- Routes page rendering by selected section.
 
-Important UX behavior:
-
-1. Same Streamlit instance can process multiple memory dumps; no need to rerun `run.sh` for each file.
-2. Analysis state is reset in-session before each new load.
-
-## 10.2 `dashboard.py`
-
-Responsibilities:
-
-1. top-level KPIs (findings, critical, ATT&CK count, max risk)
-2. risk donut chart
-3. findings-by-category chart
-4. top critical findings cards
-5. investigation priorities summary block
-6. plugin success diagnostics when findings are empty
-
-## 10.3 `process_analysis.py`
-
-Responsibilities:
-
-1. process tree visualization with risk coloring
-2. detailed process table with suspicious row highlighting
-3. suspicious process cards
-4. command-line snippets per finding PID
-5. unusual parent-child relationship cards
-
-Dataframe normalization to string values is used to avoid Arrow conversion warnings in Streamlit.
-
-## 10.4 `network_analysis.py`
-
-Responsibilities:
-
-1. network KPI cards
-2. graph visualization (local vs remote endpoints)
-3. filterable connection table (state/PID)
-4. suspicious connection cards
-
-Dataframe columns are string-normalized to prevent mixed-type serialization warnings.
-
-## 10.5 `mitre_page.py`
-
-Responsibilities:
-
-1. technique/tactic KPIs
-2. ATT&CK bubble heatmap
-3. technique summary table with severity styling
-4. expandable technique details and ATT&CK links
-
-Implementation note: uses `Styler.map` (not deprecated `applymap`) for current pandas compatibility.
-
-## 10.6 `timeline_page.py`
-
-Responsibilities:
-
-1. event KPIs
-2. timeline chart
-3. category/risk filters
-4. event cards and detail expanders
-
-Current chart implementation avoids overlap via category-axis indexing plus jitter in chart component.
-
-## 10.7 `ai_chat.py`
-
-Responsibilities:
-
-1. provider status indicator
-2. quick-action analysis buttons
-3. conversational chat input/history
-4. suggested questions when history is empty
-
-## 10.8 `ioc_summary.py`
-
-Responsibilities:
-
-1. IOC extraction from findings
-2. tabbed IOC views (IP/process/ports/services/techniques)
-3. risk-level styled IOC tables
-4. export text area
-5. AI-generated IOC narrative panel
-
-## 10.9 `reports_page.py`
-
-Responsibilities:
-
-1. report type selection and metadata capture
-2. report preview generation
-3. trigger PDF generation and download button
-4. optional AI summary preview expander
+Session state contract created here:
+1. Engines: vol_engine, detector, mitre_mapper, ai_engine, scenario_loader.
+2. Analysis state: evidence_loaded, evidence_info, plugin_results, findings.
+3. Progress state: analysis_status, analysis_task_thread, analysis_lock.
+4. UX state: analysis_complete, chat_history, current_scenario.
 
 ---
 
-## 11. UI Components
+## 6) config.py (Normalization and Validation Pipeline)
 
-## 11.1 `ui/components/charts.py`
+### 6.1 Helper functions
 
-Chart factories:
+- _env_str(name, default)
+  - Reads environment variable as trimmed string.
 
-1. `create_risk_donut`
-2. `create_category_bar`
-3. `create_process_tree`
-4. `create_network_graph`
-5. `create_timeline` (jittered category points + hover details)
-6. `create_mitre_heatmap`
+- _env_int(name, default)
+  - Reads integer env var with safe fallback.
 
-## 11.2 `ui/components/metrics.py`
+- _split_csv(value)
+- _env_csv(name)
+  - CSV parsing for environment list values.
 
-HTML-based reusable elements:
+- _to_int_list(values)
+  - Parses and validates port lists (1..65535), order-preserving dedupe.
 
-1. `page_header`
-2. `risk_badge`
-3. `stat_card`
-4. `finding_card`
-5. `info_banner`
+- _normalize_supported_formats(values, defaults)
+  - Normalizes extensions (lowercase, ensure leading dot).
+
+- _normalize_plugin_list(values, defaults)
+  - Cleans/deduplicates plugin identifiers.
+
+- _normalize_lowercase_list(values, defaults)
+  - Lowercases and deduplicates string lists.
+
+- _normalize_ollama_url(url, default)
+  - Ensures valid Ollama URL shape.
+
+- _normalize_ai_provider(provider)
+  - Restricts provider to allowed set.
+
+- _normalize_windows_processes(values, defaults)
+  - Validates expected path/parent/instance metadata.
+
+- _normalize_map_of_string_lists(values, defaults)
+  - Validates dict[str, list[str]] maps (e.g., suspicious parents).
+
+- _normalize_homoglyph_map(values, defaults)
+  - Normalizes homoglyph lookup map.
+
+- _normalize_risk_levels(values, defaults)
+  - Validates risk colors/thresholds and enforces descending thresholds.
+
+### 6.2 Runtime constants and model
+
+Primary groups:
+1. App metadata (name, version, tagline).
+2. Directories (BASE_DIR, EVIDENCE_DIR, REPORTS_DIR).
+3. Supported evidence formats.
+4. AI provider and credentials.
+5. Risk level color/threshold config.
+6. Volatility plugin lists (Windows + Linux lists).
+7. Detection baselines:
+   - WINDOWS_SYSTEM_PROCESSES
+   - SUSPICIOUS_PARENTS
+   - BENIGN_INJECTION_PROCESSES
+   - SUSPICIOUS_PORTS / KNOWN_C2_PORTS
+   - HOMOGLYPH_MAP
+
+### 6.3 Finalization functions
+
+- _apply_environment_overrides()
+  - Applies env overrides for formats, plugin lists, and port lists.
+
+- validate_and_normalize_config()
+  - Ensures all values are safe/usable and directories exist.
+
+Module import behavior:
+1. _apply_environment_overrides() is called.
+2. validate_and_normalize_config() is called.
 
 ---
 
-## 12. Theme and Runtime UI Settings
+## 7) core/volatility_engine.py
 
-## 12.1 `ui/styles/theme.css`
+Classes:
 
-Main styling concepts:
+1. EvidenceFile (dataclass)
+- Stores validated evidence metadata and hashes.
+- Fields: path, filename, size, format, md5, sha256, is_valid, etc.
 
-1. dark forensic visual identity
-2. polished sidebar/tabs/buttons/cards
-3. strong contrast for tables and text inputs
-4. progress bar and scrollbar customizations
+2. PluginResult (dataclass)
+- Stores per-plugin execution result.
+- Fields: success flag, parsed rows, error text, raw output, row_count.
 
-## 12.2 `.streamlit/config.toml`
+3. VolatilityEngine
 
-1. dark base theme with project palette
-2. server bound to localhost (`127.0.0.1`)
-3. default port `8502`
-4. upload size cap `5000` MB
-5. usage stats disabled
+Key methods:
+
+- _check_volatility()
+  - Checks vol CLI first, then python -m volatility3 fallback.
+
+- _log(message)
+  - Prints timestamped runtime log lines.
+
+- _run_vol_command_streaming(cmd, timeout=300)
+  - Executes command and collects output while streaming stderr lines to logs.
+
+- validate_evidence(file_path)
+  - Confirms file existence and supported extension.
+  - Computes MD5/SHA-256 (synchronous).
+  - Returns EvidenceFile.
+
+- run_plugin(plugin_name, file_path=None)
+  - Executes single plugin in JSON mode.
+  - Attempts vol CLI, then module fallback.
+  - Parses JSON rows into PluginResult.
+
+- run_all_plugins(file_path, os_type="windows", progress_callback=None, plugins=None)
+  - Runs plugin list sequentially.
+  - Supports caller-provided plugin subset.
+  - Validates plugin names against known list and deduplicates while preserving order.
+  - Emits progress_callback(done, total, plugin, phase).
+
+- get_results()
+  - Returns cached plugin result dict.
+
+- load_demo_results(scenario_data)
+  - Adapts injected scenario dict to PluginResult objects.
+
+- _hash_file(path, algo)
+- _human_size(size_bytes)
+
+How this file is used:
+1. Created once in app.py session state.
+2. Home page calls validate_evidence() and run_all_plugins().
+3. All downstream pages read st.session_state.plugin_results.
 
 ---
 
-## 13. Reporting Module (`reports/report_generator.py`)
+## 8) core/anomaly_detector.py
 
-Two classes:
+Classes:
 
-1. `ForensicReportPDF` (FPDF subclass for consistent header/footer/sections)
-2. `ReportGenerator` (dispatches report type and writes PDF bytes)
+1. Finding (dataclass)
+- Unified detection artifact used by all pages.
+- Fields: category, artifact_id, title, description, risk_score, evidence, techniques, timestamp, triage_status.
+- Properties: risk_level, requires_manual_review.
 
-Supported report flows:
+2. AnomalyDetector
 
+Primary pipeline:
+
+- analyze_all(plugin_results)
+  - Entry point.
+  - Selects plugin outputs, builds process index, invokes analyzers, sorts findings by risk.
+
+Supporting methods:
+
+- _build_process_index(processes)
+  - Normalizes process rows into int-keyed PID index with parent and timestamp metadata.
+
+- _analyze_processes(process_index, cmdlines)
+  - Runs multiple process checks and instance-count checks.
+
+- _is_expected_smss_child(name, parent_name)
+  - Suppresses expected csrss/winlogon/wininit parent noise.
+
+- _check_path_anomaly(name, cmdline, pid, raw)
+  - Detects system process path mismatches.
+
+- _check_parent_anomaly(name, parent_name, pid, raw)
+  - Parent-child anomaly and suspicious parent checks.
+
+- _check_scripting_runtime_parent(name, parent_name, ppid, pid, raw)
+  - Flags runtime interpreters under suspicious service-host parents.
+  - Unresolved-parent fallback now gated to Session 0 only.
+
+- _check_name_spoofing(name, pid, raw)
+  - Homoglyph-based masquerading detection.
+
+- _check_suspicious_cmdline(name, cmdline, pid, raw)
+  - Regex signatures (encoded PowerShell, download cradles, vssadmin abuse, etc.).
+
+- _analyze_network(connections)
+  - Deduplicates endpoint findings via endpoint_findings map.
+  - Aggregates suspicious remote port, high-frequency beaconing, and suspicious local listening port signals.
+  - Emits finding only when reasons list is non-empty.
+
+- _analyze_injections(malfind_data, process_index)
+  - Uses malfind results, dedupes by PID.
+  - Adjusts severity by protection and process context.
+  - Applies benign-injection triage list.
+
+- _analyze_dlls(dlllist_data)
+  - Flags DLLs loaded from temp/download-like paths.
+  - Normalizes path separators before matching.
+
+- _analyze_services(svcscan_data)
+  - Flags suspicious service binary paths and interpreter-based service binaries.
+
+- get_risk_summary()
+- get_findings_by_category()
+
+How this file is used:
+1. Home page invokes detector after plugin completion.
+2. Findings are shared to all pages and report generation.
+
+---
+
+## 9) core/mitre_mapper.py
+
+Data model:
+
+- MitreTechnique (dataclass)
+  - technique_id, name, tactic, description, detection, url.
+
+Static catalogs:
+1. MITRE_TECHNIQUES dict.
+2. TACTIC_ORDER list.
+
+Class:
+
+- MitreMapper
+
+Methods:
+
+- get_technique(technique_id)
+- map_findings(findings)
+  - Builds technique_id -> list[Finding].
+
+- get_tactic_heatmap_data(findings)
+  - Returns tactic-keyed data with count and max severity.
+
+- get_detected_techniques(findings)
+  - Returns sorted list of technique summaries.
+
+- get_unique_tactics(findings)
+
+How this file is used:
+1. MITRE page KPIs, table, and detail panels.
+2. MITRE heatmap chart input.
+3. MITRE report generation.
+
+---
+
+## 10) core/ai_engine.py
+
+Class:
+
+- AIEngine
+
+State:
+1. Configured provider and active base URL.
+2. Context payload for AI prompts.
+3. Confirmed MITRE ID string used to constrain model references.
+
+Connectivity and provider checks:
+
+- _candidate_base_urls()
+- check_ollama()
+- _check_openai_compatible(base_url, api_key)
+- check_provider()
+- has_model()
+- is_available property
+- provider_status()
+
+Rate-limit and transient handling:
+
+- _retry_after_seconds(response, default_delay)
+- _is_transient_status(status_code)
+- _post_with_backoff(...)
+  - Retries transient statuses (429/5xx) with bounded backoff.
+
+Context and prompt path:
+
+- set_context(findings_summary, plugin_data_summary, confirmed_mitre_ids="")
+  - Injects analysis evidence and guardrails into shared context.
+
+- _system_prompt()
+  - Requires MITRE references to only use confirmed IDs.
+
+Query routing:
+
+- ask(question, scenario_id="")
+  - Dispatches by provider.
+
+- _query_ollama(question)
+- _query_openai_compatible(provider_name, base_url, api_key, model, question)
+- _query_anthropic(question)
+- _extract_error_text(response)
+- _memory_error_response(details)
+- _offline_response(question)
+
+Quick-analysis helpers:
+
+- get_auto_analysis()
+- get_attack_narrative()
+- get_ioc_list()
+- get_recommendations()
+
+Important note:
+1. Current behavior is strict offline response when provider is unavailable.
+2. No synthetic/mock response generation is used.
+
+---
+
+## 11) core/scenario_loader.py
+
+Class:
+
+- ScenarioLoader
+
+Current behavior:
+1. Scenario loading is effectively disabled (empty scenario store).
+2. Helper methods still exist and return empty/default structures if no scenario data.
+
+Methods:
+
+- _load_scenarios()
+- list_scenarios()
+- get_scenario(scenario_id)
+- get_plugin_data(scenario_id)
+- get_processes(scenario_id)
+- get_connections(scenario_id)
+- get_cmdlines(scenario_id)
+- get_timeline_events(scenario_id, findings=None)
+
+---
+
+## 12) UI Pages
+
+## 12.1 ui/pages/home.py
+
+Purpose:
+1. Evidence load/reset workflow.
+2. Plugin selection preset/custom UI.
+3. Background analysis threading + progress rendering.
+4. Evidence metadata display.
+
+Constants:
+1. PLUGIN_LABELS
+2. PRESET_PROFILES
+
+Functions:
+
+- _start_background_analysis(file_path, evidence, plugins=None)
+  - Spawns worker thread for plugin execution + detection.
+  - Updates shared analysis_status.
+
+- _apply_completed_analysis_if_needed()
+  - Applies finished payload into session state once.
+
+- _render_analysis_progress()
+  - Running/completed/failed visuals and summaries.
+
+- _render_evidence_details(evidence)
+  - Styled evidence metadata panel.
+
+- _render_hero()
+- _render_evidence_loader()
+  - File path input + plugin selector + Validate & Load button.
+  - Clear Current gate when evidence is already loaded.
+
+- render_home()
+  - Top-level page composition.
+
+## 12.2 ui/pages/dashboard.py
+
+Purpose:
+1. Global investigation KPIs.
+2. Risk and category charts.
+3. Confirmed vs review finding display separation.
+4. Priority action guidance.
+
+Function:
+
+- render_dashboard()
+  - Computes risk stats and techniques count.
+  - Shows top confirmed findings and review section.
+  - Priority section now falls back to review findings when confirmed list is empty.
+
+## 12.3 ui/pages/process_analysis.py
+
+Purpose:
+1. Process tree and process detail table.
+2. Suspicious process cards and cmdline drilldown.
+3. Parent-child anomaly panel.
+
+Functions:
+
+- _has_suspicious_parent(name, ppid, pid_map)
+  - Determines suspicious parent relationships using mapping list.
+
+- render_process_analysis()
+  - Builds pid/cmdline maps.
+  - Highlights suspicious rows and renders finding cards.
+
+## 12.4 ui/pages/network_analysis.py
+
+Purpose:
+1. Network KPIs, graph, connection table, suspicious cards.
+2. State/PID filtering and row highlighting.
+
+Function:
+
+- render_network_analysis()
+  - Builds DataFrame for connection details.
+  - Highlights by suspicious remote IP evidence and listen-only PID set.
+
+## 12.5 ui/pages/mitre_page.py
+
+Purpose:
+1. ATT&CK KPIs.
+2. Heatmap rendering.
+3. Technique table and detail expanders.
+
+Function:
+
+- render_mitre()
+  - Uses MitreMapper outputs to populate all page sections.
+
+## 12.6 ui/pages/timeline_page.py
+
+Purpose:
+1. Timeline KPIs and chart.
+2. Event filtering and details.
+3. Forensic detail formatting for memory fields.
+
+Functions:
+
+- _format_memory_address(value)
+- _normalize_bool(value)
+- _format_detail_item(key, value)
+- _format_timestamp(value)
+- _extract_event_timestamp(finding)
+- render_timeline()
+
+## 12.7 ui/pages/ai_chat.py
+
+Purpose:
+1. AI provider status and quick-action buttons.
+2. Chat history rendering and input.
+3. Suggested question shortcuts.
+
+Functions:
+
+- _render_chat_card(role, content)
+  - Escapes user/AI text and supports minimal markdown-like formatting.
+
+- render_ai_chat()
+  - Orchestrates quick actions, chat history, and free-form prompt calls.
+
+## 12.8 ui/pages/ioc_summary.py
+
+Purpose:
+1. IOC extraction and tabbed presentation.
+2. Confirmed-vs-review distinction.
+3. Plain-text export and AI IOC summary panel.
+
+Function:
+
+- render_ioc_summary()
+  - Computes unique IOC sets.
+  - Uses process_scores to sort suspicious processes by risk.
+  - Sanitizes export text by replacing HTML br variants with newlines.
+
+## 12.9 ui/pages/reports_page.py
+
+Purpose:
+1. Report type/config form.
+2. Preview composition.
+3. Report generation/download controls.
+
+Functions:
+
+- _build_preview(report_type, findings)
+- render_reports()
+- _md_to_html(md)
+
+---
+
+## 13) UI Components
+
+## 13.1 ui/components/charts.py
+
+Shared chart factories:
+
+- _parse_timestamp(value)
+- create_risk_donut(summary)
+- create_category_bar(findings_by_cat)
+- create_process_tree(processes)
+- create_network_graph(connections)
+- create_timeline(events)
+  - Adds deterministic millisecond offsets for duplicate timestamp/category points.
+
+- create_mitre_heatmap(tactic_data)
+  - Uses merged layout dict to avoid duplicate margin argument conflicts.
+
+## 13.2 ui/components/metrics.py
+
+Reusable styled UI elements:
+
+- page_header(title, subtitle="", icon="")
+- risk_badge(level, large=False)
+- stat_card(label, value, color="#38bdf8", icon="")
+- finding_card(title, description, risk_score, category, techniques, evidence_id="", triage_status="")
+  - Word-boundary truncation with ellipsis for long descriptions.
+  - Unified HUMAN REVIEW REQUIRED badge rendering.
+
+- info_banner(text, type_="info")
+
+## 13.3 ui/styles/theme.css
+
+Global visual system:
+1. Dark forensic theme.
+2. Sidebar, tabs, buttons, dataframe, input styling.
+3. Custom footer and animation polish.
+
+---
+
+## 14) Reporting Engine (reports/report_generator.py)
+
+Classes:
+
+1. ForensicReportPDF(FPDF)
+- Handles page chrome and section/finding rendering.
+
+Methods:
+- header(), footer()
+- add_title_page(...)
+- add_section_header(title)
+- _safe(text)
+- add_finding(...)
+- add_text(text, size=10)
+
+2. ReportGenerator
+
+Methods:
+- _normalize_report_type(report_type)
+- generate(...)
+- _add_executive_summary(...)
+- _add_technical_analysis(...)
+- _add_ioc_report(...)
+- _add_mitre_report(...)
+
+Supported report modes:
 1. Executive Summary
 2. Technical Analysis
 3. IOC Report
 4. MITRE ATT&CK Report
 
-Output is retained in memory and exposed to UI via `st.download_button`.
+---
+
+## 15) File-by-File Quick Function Index
+
+This index lists symbols per Python file for rapid navigation.
+
+- app.py
+  - init_session_state, load_css, main
+
+- config.py
+  - _env_str, _env_int, _split_csv, _env_csv, _to_int_list
+  - _normalize_supported_formats, _normalize_plugin_list, _normalize_lowercase_list
+  - _normalize_ollama_url, _normalize_ai_provider
+  - _normalize_windows_processes, _normalize_map_of_string_lists
+  - _normalize_homoglyph_map, _normalize_risk_levels
+  - _apply_environment_overrides, validate_and_normalize_config
+
+- core/volatility_engine.py
+  - EvidenceFile, PluginResult, VolatilityEngine
+
+- core/anomaly_detector.py
+  - Finding, AnomalyDetector and all _analyze/_check helpers
+
+- core/mitre_mapper.py
+  - MitreTechnique, MitreMapper
+
+- core/ai_engine.py
+  - AIEngine and provider/backoff/query helpers
+
+- core/scenario_loader.py
+  - ScenarioLoader
+
+- ui/pages/home.py
+  - _start_background_analysis, _apply_completed_analysis_if_needed, _render_analysis_progress
+  - _render_evidence_details, _render_hero, _render_evidence_loader, render_home
+
+- ui/pages/dashboard.py
+  - render_dashboard
+
+- ui/pages/process_analysis.py
+  - _has_suspicious_parent, render_process_analysis
+
+- ui/pages/network_analysis.py
+  - render_network_analysis
+
+- ui/pages/mitre_page.py
+  - render_mitre
+
+- ui/pages/timeline_page.py
+  - _format_memory_address, _normalize_bool, _format_detail_item, _format_timestamp, _extract_event_timestamp, render_timeline
+
+- ui/pages/ai_chat.py
+  - _render_chat_card, render_ai_chat
+
+- ui/pages/ioc_summary.py
+  - render_ioc_summary
+
+- ui/pages/reports_page.py
+  - _build_preview, render_reports, _md_to_html
+
+- ui/components/charts.py
+  - _parse_timestamp, create_risk_donut, create_category_bar, create_process_tree
+  - create_network_graph, create_timeline, create_mitre_heatmap
+
+- ui/components/metrics.py
+  - page_header, risk_badge, stat_card, finding_card, info_banner
+
+- reports/report_generator.py
+  - ForensicReportPDF, ReportGenerator
+
+- __init__.py files (root/core/ui/ui/pages/ui/components/reports)
+  - Package markers only (no functions/classes)
 
 ---
 
-## 14. End-to-End Data Flow
+## 16) Current Operational Constraints
 
-1. User starts app via `run.sh`.
-2. Home page accepts evidence path.
-3. File validated and hashed.
-4. Plugins executed sequentially with callback updates.
-5. `plugin_results` stored in session.
-6. detector converts plugin rows to findings.
-7. findings passed to dashboards/pages/AI/reporting.
-8. analyst iterates, chats, and exports report.
+1. Plugin execution is sequential (no parallel scheduling).
+2. Evidence hashing is synchronous and can delay initial load UX on large dumps.
+3. Default analysis scope is Windows-focused.
+4. AI output quality depends on provider/model availability and network.
 
 ---
 
-## 15. Session State Contract
+## 17) Suggested Developer Validation Loop
 
-Primary keys and intent:
+1. Setup
+- ./setup.sh
 
-1. `vol_engine`: plugin orchestration object
-2. `detector`: finding generation object
-3. `mitre_mapper`: ATT&CK mapping helper
-4. `ai_engine`: AI provider/caching layer
-5. `scenario_loader`: optional scenario helper
-6. `evidence_loaded`: gate for analysis pages
-7. `evidence_info`: currently loaded file metadata
-8. `plugin_results`: per-plugin structured output
-9. `findings`: unified alert list
-10. `current_scenario`: scenario context when used
-11. `analysis_complete`: run-finished flag
-12. `chat_history`: AI chat transcript
+2. Run
+- ./run.sh
 
----
+3. Quick checks
+- Python compile: python3 -m compileall -q app.py config.py core ui reports
+- Deprecated cache API check: grep -rn "st.cache" .
 
-## 16. Logging and Observability
-
-Sources:
-
-1. `run.sh` produces timestamped log files and mirrors output live.
-2. `VolatilityEngine` emits plugin progress/failure logs with timestamps.
-3. Streamlit runtime warnings/exceptions appear in same launcher log stream.
-
-Typical operational checks:
-
-1. confirm plugin completion count via `Completed plugin:` lines
-2. inspect `Plugin failed` messages and stderr snippets
-3. verify AI provider status via sidebar message
+4. UI smoke
+1. Home
+2. Dashboard
+3. Process Analysis
+4. Network Analysis
+5. MITRE ATT&CK
+6. Timeline
+7. AI Analyst
+8. IOC Summary
+9. Reports
 
 ---
 
-## 17. Security and Operational Notes
-
-1. `.env` is ignored by git.
-2. API keys should never be committed.
-3. default localhost bind reduces accidental exposure.
-4. report PDFs may include sensitive host/process/network data; treat output as confidential.
-5. memory dumps can contain credentials/secrets; enforce access controls on evidence storage.
-
----
-
-## 18. Known Limitations
-
-1. plugin execution is sequential; no parallel plugin scheduling.
-2. fallback to `python3 -m volatility3` may fail in environments where module invocation differs.
-3. ATT&CK technique catalog is static in code, not dynamically synced.
-4. AI quality depends on provider/model availability and context completeness.
-5. heuristic detections are rule-based; still subject to environment-specific false positives/false negatives.
-
----
-
-## 19. Suggested Experimental Evaluation for Your Paper
-
-For a strong major-project paper, evaluate on at least 3 axes.
-
-## 19.1 Detection Utility
-
-1. Prepare labeled test cases or curated memory dumps.
-2. Measure precision-like behavior by manually validating top N findings.
-3. Report false-positive trends before/after threshold tuning.
-
-## 19.2 Analyst Efficiency
-
-1. Time-to-triage comparison: raw Volatility workflow vs VolatileAI workflow.
-2. Time-to-report comparison using built-in PDF export.
-3. Measure reduction in manual correlation steps.
-
-## 19.3 Explainability and Actionability
-
-1. Evaluate whether findings include enough artifact context (PID/IP/path/cmdline).
-2. Evaluate ATT&CK mapping coverage and relevance.
-3. Evaluate AI outputs for confidence language and overclaim suppression.
-
----
-
-## 20. Reproducibility Procedure
-
-1. Clone repository.
-2. Run `./setup.sh`.
-3. Copy `.env.example` to `.env` and configure provider if needed.
-4. Start with `./run.sh`.
-5. Load memory evidence via Home page.
-6. Validate plugin completion and findings in Dashboard.
-7. Export one Technical Analysis report.
-8. Archive logs from `logs/` for experiment traceability.
-
----
-
-## 21. File-by-File Quick Reference Table
-
-| File | What It Does |
-|------|---------------|
-| `app.py` | Streamlit app bootstrap, routing, global session object setup |
-| `config.py` | Runtime config parsing/normalization, provider selection, plugin/risk defaults |
-| `run.sh` | Runtime entry, `.env` loading, safe bind, live log tee |
-| `setup.sh` | One-time setup and dependency install |
-| `requirements.txt` | Python package dependencies |
-| `.env.example` | Template env vars for provider/runtime control |
-| `.streamlit/config.toml` | Streamlit server/theme/browser config |
-| `core/volatility_engine.py` | Evidence validation, plugin exec, progress callback, plugin result model |
-| `core/anomaly_detector.py` | Heuristic detections and risk scoring |
-| `core/mitre_mapper.py` | ATT&CK technique model and mapping transforms |
-| `core/ai_engine.py` | Provider routing, prompt context, cache/fuzzy fallback |
-| `core/scenario_loader.py` | Optional scenario JSON loading and timeline synthesis |
-| `ui/pages/home.py` | Evidence loading workflow, progress UI, reset workflow |
-| `ui/pages/dashboard.py` | KPIs, charts, top findings, priorities |
-| `ui/pages/process_analysis.py` | Process tree, process table, suspicious process drilldown |
-| `ui/pages/network_analysis.py` | Network graph/table/filtering and suspicious connections |
-| `ui/pages/mitre_page.py` | ATT&CK metrics, heatmap, technique detail panels |
-| `ui/pages/timeline_page.py` | Event timeline visualization/filtering/details |
-| `ui/pages/ai_chat.py` | AI chat experience and quick actions |
-| `ui/pages/ioc_summary.py` | IOC extraction tabs and export panel |
-| `ui/pages/reports_page.py` | Report configuration, generation, download |
-| `ui/components/charts.py` | Plotly chart factories |
-| `ui/components/metrics.py` | Reusable HTML UI widgets |
-| `ui/styles/theme.css` | Global dark forensic theme |
-| `reports/report_generator.py` | PDF report rendering engine |
-| `README.md` | User-facing quickstart and feature list |
-| `.gitignore` | Ignore local/secrets/runtime artifacts |
-| `__init__.py` files | Package markers |
-
----
-
-## 22. What Changed Recently (Important for Paper Accuracy)
-
-1. Added progress callback path from engine to UI for plugin-level progress and ETA.
-2. Added in-session multi-evidence handling and clear/reset workflow in Home page.
-3. Improved live log behavior in launcher with line-buffered stream.
-4. Replaced deprecated DataFrame Styler APIs with current-compatible usage.
-5. Reduced false-positive pressure in anomaly heuristics and AI prompt guidance.
-6. Improved timeline readability by avoiding overplot overlap patterns.
-
----
-
-## 23. Conclusion
-
-VolatileAI is a modular, end-to-end memory investigation platform that sits between raw plugin output and analyst decision-making. Its value lies in deterministic detection logic, coherent ATT&CK contextualization, practical AI assistance, and report automation. The codebase is structured for explainability and iterative improvement, making it suitable for both academic evaluation and real-world SOC prototyping.
-
----
-
-Prepared for major-project documentation and paper-writing use.
+Prepared as a complete, current file/function behavior reference for implementation, maintenance, and paper writing.
