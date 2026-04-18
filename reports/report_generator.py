@@ -2,7 +2,7 @@
 
 import io
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import List
 
 from fpdf import FPDF
 
@@ -108,9 +108,25 @@ class ForensicReportPDF(FPDF):
 class ReportGenerator:
     """Generates forensic PDF reports."""
 
+    def _normalize_report_type(self, report_type: str) -> str:
+        """Map UI labels and legacy aliases to canonical internal report types."""
+        raw = (report_type or "").strip()
+        key = raw.lower()
+        aliases = {
+            "executive summary": "Executive Summary",
+            "executive summary report": "Executive Summary",
+            "technical analysis": "Technical Analysis",
+            "technical analysis report": "Technical Analysis",
+            "ioc report": "IOC Report",
+            "mitre att&ck report": "MITRE ATT&CK Report",
+        }
+        return aliases.get(key, raw)
+
     def generate(self, report_type: str, findings: list, plugin_results: dict,
                  evidence_info, org_name: str, analyst_name: str, case_number: str,
                  scenario_name: str, ai_engine=None, scenario_id: str = "") -> bytes:
+
+        report_type = self._normalize_report_type(report_type)
 
         pdf = ForensicReportPDF()
         pdf.alias_nb_pages()

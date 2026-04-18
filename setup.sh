@@ -13,10 +13,20 @@ fi
 echo "[2/3] Installing dependencies..."
 source venv/bin/activate
 pip install --upgrade pip -q
-pip install streamlit plotly pandas numpy pyyaml fpdf2 networkx requests -q
+if [ -f "requirements.txt" ]; then
+    pip install -r requirements.txt -q
+else
+    pip install streamlit plotly pandas numpy pyyaml fpdf2 networkx requests volatility3 -q
+fi
+
+if command -v vol >/dev/null 2>&1; then
+    echo "    Volatility CLI detected: $(vol -h >/dev/null 2>&1; echo OK)"
+else
+    echo "    WARNING: volatility3 installed but 'vol' command was not found in PATH."
+fi
 
 echo "[3/3] Creating output directories..."
-mkdir -p reports/output evidence idata/cached_responses idata/demo_scenarios
+mkdir -p reports/output evidence logs
 
 echo ""
 echo "=== Setup Complete ==="

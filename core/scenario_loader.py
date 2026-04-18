@@ -1,31 +1,16 @@
 """Demo scenario loader — loads synthetic Volatility data for demos."""
 
-import json
-from pathlib import Path
 from typing import Dict, List, Optional
-
-from config import DEMO_DIR
 
 
 class ScenarioLoader:
-    """Loads and manages demo attack scenarios."""
+    """Scenario loader disabled: returns no synthetic scenario data."""
 
     def __init__(self):
         self._scenarios: Dict[str, Dict] = {}
-        self._load_scenarios()
 
     def _load_scenarios(self):
-        if not DEMO_DIR.exists():
-            return
-
-        for f in DEMO_DIR.glob("scenario_*.json"):
-            try:
-                with open(f) as fp:
-                    data = json.load(fp)
-                sid = data.get("id", f.stem)
-                self._scenarios[sid] = data
-            except Exception:
-                pass
+        return
 
     def list_scenarios(self) -> List[Dict]:
         return [

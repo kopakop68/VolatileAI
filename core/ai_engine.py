@@ -1,8 +1,9 @@
-"""AI analysis engine — Ollama integration with caching and RAG."""
+"""AI analysis engine — provider routing with strict offline behavior."""
 
-import json
+import time
+
 import requests
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from config import (
     AI_PROVIDER,
@@ -10,7 +11,6 @@ from config import (
     ANTHROPIC_API_KEY,
     ANTHROPIC_BASE_URL,
     ANTHROPIC_MODEL,
-    CACHE_DIR,
     GROQ_API_KEY,
     GROQ_BASE_URL,
     GROQ_MODEL,
@@ -26,15 +26,62 @@ from config import (
 
 
 class AIEngine:
-    """Handles AI analysis with provider routing and intelligent caching."""
+    """Handles AI analysis with provider routing only (no mock/cache fallback)."""
 
     def __init__(self):
         self._ollama_available = False
         self._provider = AI_PROVIDER
         self._active_base_url = OLLAMA_BASE_URL
-        self._cached_responses: Dict[str, str] = {}
         self._context_data: str = ""
-        self._load_cached_responses()
+        self._confirmed_mitre_ids: str = ""
+
+    def _retry_after_seconds(self, response: requests.Response, default_delay: float) -> float:
+        retry_after = response.headers.get("Retry-After", "")
+        try:
+            if retry_after:
+                return max(float(retry_after), 0.0)
+        except (TypeError, ValueError):
+            pass
+        return default_delay
+
+    def _is_transient_status(self, status_code: int) -> bool:
+        return status_code in {429, 500, 502, 503, 504}
+
+    def _post_with_backoff(
+        self,
+        *,
+        url: str,
+        headers: Dict[str, str],
+        json_payload: Dict,
+        timeout: int,
+        provider_name: str,
+        max_attempts: int = 3,
+    ) -> requests.Response:
+        last_response = None
+
+        for attempt in range(1, max_attempts + 1):
+            response = requests.post(
+                url,
+                headers=headers,
+                json=json_payload,
+                timeout=timeout,
+            )
+            last_response = response
+
+            if response.status_code == 200 or not self._is_transient_status(response.status_code):
+                return response
+
+            if attempt >= max_attempts:
+                return response
+
+            if response.status_code == 429:
+                delay = self._retry_after_seconds(response, default_delay=2.0 * attempt)
+            else:
+                delay = 1.5 * attempt
+
+            time.sleep(min(delay, 8.0))
+
+        return last_response
 
     @property
     def provider(self) -> str:
@@ -144,21 +191,27 @@ class AIEngine:
             return {
                 "connected": False,
                 "dot": "#eab308",
-                "message": "Ollama unavailable — using cached responses",
+                "message": "Ollama unavailable — offline",
             }
 
         return {
             "connected": False,
             "dot": "#f97316",
-            "message": f"{self.provider_label} unavailable or missing API key — using cached responses",
+            "message": f"{self.provider_label} unavailable or missing API key — offline",
         }
 
-    def set_context(self, findings_summary: str, plugin_data_summary: str):
+    def set_context(self, findings_summary: str, plugin_data_summary: str, confirmed_mitre_ids: str = ""):
+        self._confirmed_mitre_ids = ", ".join(
+            item.strip() for item in str(confirmed_mitre_ids or "").split(",") if item.strip()
+        )
         self._context_data = f"""You are VolatileAI, an expert memory forensics analyst AI assistant. 
 You are analyzing a memory dump and have the following evidence:
 
 === ANALYSIS FINDINGS ===
 {findings_summary}
+
+=== CONFIRMED MITRE ATT&CK IDS ===
+{self._confirmed_mitre_ids or 'None confirmed yet'}
 
 === RAW EVIDENCE DATA ===
 {plugin_data_summary}
@@ -169,20 +222,15 @@ When answering questions:
 - Provide confidence levels for your assessments
 - Suggest follow-up investigation steps
 - Be thorough but concise
+- Avoid false positives: do not label activity as confirmed malicious unless at least two independent indicators support it
+- If evidence is weak or ambiguous, explicitly mark it as "suspicious" or "possible" rather than "confirmed"
+- Mention plausible benign explanations when relevant
+- Prioritize high-confidence findings and clearly separate them from low-confidence hypotheses
 """
 
     def ask(self, question: str, scenario_id: str = "") -> str:
-        cache_key = self._make_cache_key(question, scenario_id)
-        cached = self._cached_responses.get(cache_key)
-        if cached:
-            return cached
-
-        fuzzy = self._fuzzy_match(question, scenario_id)
-        if fuzzy:
-            return fuzzy
-
         if not self.check_provider():
-            return self._fallback_response(question)
+            return self._offline_response(question)
 
         if self._provider == "ollama":
             return self._query_ollama(question)
@@ -213,14 +261,17 @@ When answering questions:
         if self._provider == "anthropic":
             return self._query_anthropic(question)
 
-        return self._fallback_response(question)
+        return self._offline_response(question)
 
     def _query_ollama(self, question: str) -> str:
         if not self._ollama_available:
             self.check_ollama()
 
         try:
-            prompt = f"{self._context_data}\n\nUser Question: {question}\n\nProvide a detailed forensic analysis response:"
+            prompt = (
+                f"{self._system_prompt()}\n\n"
+                f"{self._context_data}\n\nUser Question: {question}\n\nProvide a detailed forensic analysis response:"
+            )
 
             r = requests.post(
                 f"{self._active_base_url}/api/generate",
@@ -286,22 +337,23 @@ When answering questions:
 
         prompt = f"{self._context_data}\n\nUser Question: {question}\n\nProvide a detailed forensic analysis response:"
         try:
-            r = requests.post(
-                f"{base_url}/chat/completions",
+            r = self._post_with_backoff(
+                url=f"{base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
+                json_payload={
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": "You are an expert memory forensics analyst."},
+                        {"role": "system", "content": self._system_prompt()},
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": 0.3,
                     "max_tokens": 1024,
                 },
                 timeout=AI_TIMEOUT_SECONDS,
+                provider_name=provider_name,
             )
 
             if r.status_code == 200:
@@ -314,6 +366,13 @@ When answering questions:
                         if isinstance(content, str) and content.strip():
                             return content
                 return f"{provider_name} returned an empty response."
+
+            if r.status_code == 429:
+                return (
+                    f"{provider_name} rate limit reached for the current API key. "
+                    "Wait briefly and retry, or reduce request frequency. "
+                    f"Details: {self._extract_error_text(r) or 'No error details from server.'}"
+                )
 
             return (
                 f"{provider_name} API returned status {r.status_code}. "
@@ -328,23 +387,27 @@ When answering questions:
         if not ANTHROPIC_API_KEY:
             return "Anthropic API key is missing. Set ANTHROPIC_API_KEY."
 
-        prompt = f"{self._context_data}\n\nUser Question: {question}\n\nProvide a detailed forensic analysis response:"
+        prompt = (
+            f"{self._system_prompt()}\n\n"
+            f"{self._context_data}\n\nUser Question: {question}\n\nProvide a detailed forensic analysis response:"
+        )
         try:
-            r = requests.post(
-                f"{ANTHROPIC_BASE_URL}/messages",
+            r = self._post_with_backoff(
+                url=f"{ANTHROPIC_BASE_URL}/messages",
                 headers={
                     "x-api-key": ANTHROPIC_API_KEY,
                     "anthropic-version": "2023-06-01",
                     "Content-Type": "application/json",
                 },
-                json={
+                json_payload={
                     "model": ANTHROPIC_MODEL,
                     "max_tokens": 1024,
                     "temperature": 0.3,
-                    "system": "You are an expert memory forensics analyst.",
+                    "system": self._system_prompt(),
                     "messages": [{"role": "user", "content": prompt}],
                 },
                 timeout=AI_TIMEOUT_SECONDS,
+                provider_name="Anthropic",
             )
 
             if r.status_code == 200:
@@ -360,6 +423,13 @@ When answering questions:
                     if texts:
                         return "\n\n".join(texts)
                 return "Anthropic returned an empty response."
+
+                if r.status_code == 429:
+                    return (
+                        "Anthropic rate limit reached for the current API key. "
+                        "Wait briefly and retry, or reduce request frequency. "
+                        f"Details: {self._extract_error_text(r) or 'No error details from server.'}"
+                    )
 
             return (
                 f"Anthropic API returned status {r.status_code}. "
@@ -398,38 +468,7 @@ When answering questions:
             "Then set OLLAMA_MODEL to one of those models and restart the app."
         )
 
-    def _make_cache_key(self, question: str, scenario_id: str = "") -> str:
-        normalized = question.lower().strip().rstrip("?").strip()
-        return f"{scenario_id}:{normalized}" if scenario_id else normalized
-
-    def _fuzzy_match(self, question: str, scenario_id: str = "") -> Optional[str]:
-        q_lower = question.lower().strip()
-        q_words = set(q_lower.split())
-
-        best_match = None
-        best_score = 0
-
-        for key, response in self._cached_responses.items():
-            if scenario_id and not key.startswith(scenario_id + ":"):
-                if ":" in key and not key.startswith("general:"):
-                    continue
-
-            key_clean = key.split(":", 1)[-1] if ":" in key else key
-            key_words = set(key_clean.lower().split())
-
-            if not key_words:
-                continue
-
-            overlap = len(q_words & key_words)
-            score = overlap / max(len(q_words | key_words), 1)
-
-            if score > best_score and score >= 0.45:
-                best_score = score
-                best_match = response
-
-        return best_match
-
-    def _fallback_response(self, question: str) -> str:
+    def _offline_response(self, question: str) -> str:
         provider_hint = {
             "ollama": (
                 "Ollama is not currently running or reachable.\n"
@@ -443,28 +482,11 @@ When answering questions:
             "opentext": "Set `OPENTEXT_API_KEY`, `OPENTEXT_BASE_URL`, and `OPENTEXT_MODEL` to enable live analysis.",
         }
         return (
-            "**AI Analysis (Offline Mode)**\n\n"
+            "**AI Analysis Unavailable (Offline)**\n\n"
             f"Configured provider: **{self.provider_label}**\n\n"
-            f"{provider_hint.get(self._provider, 'Configure a valid provider and credentials.')}\n\n"
-            "If no cached responses are present, AI answers will be limited until the provider is online."
+            "No cached, mock, or synthetic responses are used in offline mode.\n"
+            f"{provider_hint.get(self._provider, 'Configure a valid provider and credentials.')}"
         )
-
-    def _load_cached_responses(self):
-        self._cached_responses.clear()
-        if not CACHE_DIR.exists():
-            return
-
-        for json_file in CACHE_DIR.glob("*.json"):
-            try:
-                with open(json_file) as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    for key, val in data.items():
-                        if isinstance(val, dict):
-                            val = val.get("response", str(val))
-                        self._cached_responses[key.lower().strip()] = str(val)
-            except Exception:
-                pass
 
     def get_auto_analysis(self, scenario_id: str = "") -> str:
         return self.ask("Summarize the findings and provide an overall assessment", scenario_id)
@@ -477,3 +499,12 @@ When answering questions:
 
     def get_recommendations(self, scenario_id: str = "") -> str:
         return self.ask("What remediation steps and recommendations do you suggest", scenario_id)
+
+    def _system_prompt(self) -> str:
+        confirmed = self._confirmed_mitre_ids or "None confirmed yet"
+        return (
+            "You are an expert Windows memory forensics analyst using Volatility 3. "
+            f"CONFIRMED MITRE ATT&CK techniques detected in this analysis: {confirmed}. "
+            "When referencing MITRE techniques, only use IDs from the confirmed list. "
+            "Never invent or guess technique IDs. If unsure, say 'refer to the MITRE ATT&CK page.'"
+        )

@@ -62,6 +62,12 @@ def _normalize_plugin_list(values: Iterable[Any], defaults: List[str]) -> List[s
     return deduped or defaults
 
 
+def _normalize_lowercase_list(values: Iterable[Any], defaults: List[str]) -> List[str]:
+    cleaned = [str(v).strip().lower() for v in values if isinstance(v, str) and str(v).strip()]
+    deduped = list(dict.fromkeys(cleaned))
+    return deduped or defaults
+
+
 def _normalize_ollama_url(url: str, default: str) -> str:
     candidate = (url or "").strip().rstrip("/")
     if not candidate:
@@ -165,11 +171,6 @@ def _normalize_risk_levels(values: Dict[str, Any], defaults: Dict[str, Dict[str,
     return normalized
 
 BASE_DIR = Path(__file__).parent
-# Allows relocating data dir without code changes.
-DATA_DIR = Path(_env_str("VOLATILEAI_DATA_DIR", str(BASE_DIR / "idata"))).expanduser()
-MITRE_DIR = DATA_DIR / "mitre"
-DEMO_DIR = DATA_DIR / "demo_scenarios"
-CACHE_DIR = DATA_DIR / "cached_responses"
 EVIDENCE_DIR = BASE_DIR / "evidence"
 REPORTS_DIR = BASE_DIR / "reports" / "output"
 
@@ -216,7 +217,7 @@ _DEFAULT_RISK_LEVELS = deepcopy(RISK_LEVELS)
 
 VOLATILITY_PLUGINS_WINDOWS = [
     "windows.pslist", "windows.pstree", "windows.cmdline",
-    "windows.dlllist", "windows.netscan", "windows.malfind",
+    "windows.dlllist", "windows.netscan", "windows.malware.malfind",
     "windows.handles", "windows.svcscan", "windows.filescan",
     "windows.registry.hivelist",
 ]
@@ -233,10 +234,10 @@ _DEFAULT_VOLATILITY_PLUGINS_LINUX = list(VOLATILITY_PLUGINS_LINUX)
 
 WINDOWS_SYSTEM_PROCESSES = {
     "system": {"expected_path": "", "expected_parent": "idle", "expected_instances": 1},
-    "smss.exe": {"expected_path": r"\systemroot\system32\smss.exe", "expected_parent": "system", "expected_instances": 1},
-    "csrss.exe": {"expected_path": r"\systemroot\system32\csrss.exe", "expected_parent": "smss.exe", "expected_instances": 2},
+    "smss.exe": {"expected_path": r"\systemroot\system32\smss.exe", "expected_parent": "system", "expected_instances": -1},
+    "csrss.exe": {"expected_path": r"\systemroot\system32\csrss.exe", "expected_parent": "smss.exe", "expected_instances": -1},
     "wininit.exe": {"expected_path": r"\windows\system32\wininit.exe", "expected_parent": "smss.exe", "expected_instances": 1},
-    "winlogon.exe": {"expected_path": r"\windows\system32\winlogon.exe", "expected_parent": "smss.exe", "expected_instances": 1},
+    "winlogon.exe": {"expected_path": r"\windows\system32\winlogon.exe", "expected_parent": "smss.exe", "expected_instances": -1},
     "services.exe": {"expected_path": r"\windows\system32\services.exe", "expected_parent": "wininit.exe", "expected_instances": 1},
     "lsass.exe": {"expected_path": r"\windows\system32\lsass.exe", "expected_parent": "wininit.exe", "expected_instances": 1},
     "svchost.exe": {"expected_path": r"\windows\system32\svchost.exe", "expected_parent": "services.exe", "expected_instances": -1},
@@ -252,12 +253,40 @@ SUSPICIOUS_PARENTS = {
     "mshta.exe": ["winword.exe", "excel.exe", "outlook.exe"],
     "wscript.exe": ["winword.exe", "excel.exe", "outlook.exe"],
     "cscript.exe": ["winword.exe", "excel.exe", "outlook.exe"],
+    "python.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "pythonw.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "python3.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "node.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "perl.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "ruby.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
     "regsvr32.exe": ["winword.exe", "excel.exe", "cmd.exe", "powershell.exe"],
     "rundll32.exe": ["winword.exe", "excel.exe", "cmd.exe", "powershell.exe"],
     "certutil.exe": ["cmd.exe", "powershell.exe"],
 }
 
 _DEFAULT_SUSPICIOUS_PARENTS = deepcopy(SUSPICIOUS_PARENTS)
+
+# Security/forensics tools and OS components that can trigger malfind-style alerts
+# without necessarily indicating compromise.
+BENIGN_INJECTION_PROCESSES = [
+    "ftk imager.exe",
+    "mrt.exe",
+    "msmpeng.exe",
+    "mpdefendercore.exe",
+    "mpcmdrun.exe",
+    "mpsigstub.exe",
+    "am_delta.exe",
+    "windefend.exe",
+    "defender.exe",
+    "nisrv.exe",
+    "securityhealth.exe",
+    "vboxservice.exe",
+    "vboxtray.exe",
+    "codemeter.exe",
+    "codemrtcc.exe",
+]
+
+_DEFAULT_BENIGN_INJECTION_PROCESSES = list(BENIGN_INJECTION_PROCESSES)
 
 SUSPICIOUS_PORTS = [4444, 5555, 8888, 1337, 31337, 6666, 6667, 9001, 9050, 9051, 12345, 54321]
 KNOWN_C2_PORTS = [443, 8443, 8080, 80, 53]
@@ -302,7 +331,7 @@ def _apply_environment_overrides() -> None:
 
 def validate_and_normalize_config() -> None:
     """Ensure config values remain safe and usable after edits/overrides."""
-    global DATA_DIR, MITRE_DIR, DEMO_DIR, CACHE_DIR, EVIDENCE_DIR, REPORTS_DIR
+    global EVIDENCE_DIR, REPORTS_DIR
     global SUPPORTED_FORMATS, OLLAMA_BASE_URL, OLLAMA_MODEL
     global AI_PROVIDER, AI_TIMEOUT_SECONDS
     global OPENAI_BASE_URL, OPENAI_MODEL, OPENAI_API_KEY
@@ -311,16 +340,13 @@ def validate_and_normalize_config() -> None:
     global OPENTEXT_BASE_URL, OPENTEXT_MODEL, OPENTEXT_API_KEY
     global RISK_LEVELS, VOLATILITY_PLUGINS_WINDOWS, VOLATILITY_PLUGINS_LINUX
     global WINDOWS_SYSTEM_PROCESSES, SUSPICIOUS_PARENTS, SUSPICIOUS_PORTS, KNOWN_C2_PORTS, HOMOGLYPH_MAP
+    global BENIGN_INJECTION_PROCESSES
 
     # Normalize core paths and ensure runtime directories exist.
-    DATA_DIR = Path(DATA_DIR).expanduser()
-    MITRE_DIR = Path(MITRE_DIR).expanduser()
-    DEMO_DIR = Path(DEMO_DIR).expanduser()
-    CACHE_DIR = Path(CACHE_DIR).expanduser()
     EVIDENCE_DIR = Path(EVIDENCE_DIR).expanduser()
     REPORTS_DIR = Path(REPORTS_DIR).expanduser()
 
-    for directory in (DATA_DIR, MITRE_DIR, DEMO_DIR, CACHE_DIR, EVIDENCE_DIR, REPORTS_DIR):
+    for directory in (EVIDENCE_DIR, REPORTS_DIR):
         directory.mkdir(parents=True, exist_ok=True)
 
     SUPPORTED_FORMATS = _normalize_supported_formats(SUPPORTED_FORMATS, [".raw", ".vmem", ".dmp", ".mem", ".lime", ".img"])
@@ -357,6 +383,7 @@ def validate_and_normalize_config() -> None:
     WINDOWS_SYSTEM_PROCESSES = _normalize_windows_processes(WINDOWS_SYSTEM_PROCESSES, _DEFAULT_WINDOWS_SYSTEM_PROCESSES)
     SUSPICIOUS_PARENTS = _normalize_map_of_string_lists(SUSPICIOUS_PARENTS, _DEFAULT_SUSPICIOUS_PARENTS)
     HOMOGLYPH_MAP = _normalize_homoglyph_map(HOMOGLYPH_MAP, _DEFAULT_HOMOGLYPH_MAP)
+    BENIGN_INJECTION_PROCESSES = _normalize_lowercase_list(BENIGN_INJECTION_PROCESSES, _DEFAULT_BENIGN_INJECTION_PROCESSES)
 
     SUSPICIOUS_PORTS = _to_int_list(SUSPICIOUS_PORTS) or _DEFAULT_SUSPICIOUS_PORTS
     KNOWN_C2_PORTS = _to_int_list(KNOWN_C2_PORTS) or _DEFAULT_KNOWN_C2_PORTS

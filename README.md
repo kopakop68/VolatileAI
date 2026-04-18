@@ -1,162 +1,359 @@
-# VolatileAI — AI-Powered Memory Forensics Investigation Platform
+# VolatileAI
 
-A comprehensive memory forensics analysis tool that combines **Volatility 3** framework integration with **AI-powered analysis** for automated threat detection, anomaly identification, and investigation assistance.
+VolatileAI is an AI-assisted memory forensics investigation platform that turns raw Volatility plugin output into analyst-ready findings, MITRE ATT&CK context, and report artifacts.
 
-## Features
+It is designed for Windows memory incident-response workflows where analysts need:
+1. Fast triage from a real memory dump file.
+2. Explainable rule-based detection (not black-box scoring only).
+3. Structured attack-context mapping and reporting.
+4. Optional AI assistance for narrative and recommendations.
 
-- **Evidence Loader** — Load memory dumps via file path (`.raw`, `.vmem`, `.dmp`, `.mem`, `.lime`) or use built-in demo scenarios
-- **Automated Analysis** — Heuristic-based anomaly detection for processes, network connections, DLLs, services, and code injection
-- **Process Analysis** — Interactive process tree visualization with suspicious process highlighting
-- **Network Analysis** — Network connection graph visualization with C2/beacon detection
-- **MITRE ATT&CK Mapping** — Automatic mapping of findings to MITRE ATT&CK techniques with interactive heatmap
-- **Forensic Timeline** — Chronological event reconstruction with risk-scored visualization
-- **AI Forensic Analyst** — Chat with an AI analyst (Ollama/Phi-3 or cached responses) about findings
-- **IOC Summary** — Consolidated indicator of compromise extraction and export
-- **PDF Reports** — Generate Executive Summary, Technical Analysis, IOC, and MITRE ATT&CK reports
+---
 
-## Quick Start
+## 1) Abstract (Paper-Friendly)
+
+VolatileAI combines deterministic memory-forensics heuristics with interactive visualization and large-language-model assistance in a single analyst workspace. The platform executes a configurable Volatility 3 plugin set, fuses process/network/injection/service artifacts into a unified finding model, maps evidence to MITRE ATT&CK, and exports stakeholder-oriented PDF reports. The architecture emphasizes practical analyst usability (progress feedback, in-session re-analysis, page-level drilldowns) and operational safety (localhost binding, environment-driven provider credentials).
+
+---
+
+## 2) Problem Statement
+
+Raw memory forensics output is high-value but fragmented. Analysts typically spend significant time correlating:
+1. Process trees and parent-child anomalies.
+2. Network socket state and endpoint patterns.
+3. Injection evidence from malfind.
+4. ATT&CK technique alignment.
+5. Human-readable report generation.
+
+VolatileAI addresses this by converting plugin rows into a normalized, scored finding pipeline with UI and report surfaces built around real investigation tasks.
+
+---
+
+## 3) Core Contributions
+
+1. Deterministic finding engine with category-specific heuristics and risk scoring.
+2. Plugin execution orchestration with per-plugin progress and ETA.
+3. Endpoint-level network deduplication and false-positive controls.
+4. ATT&CK tactic-technique summaries and heatmap visualizations.
+5. Multi-provider AI routing with offline-safe behavior and rate-limit backoff for live providers.
+6. In-app report generation for executive and technical audiences.
+
+---
+
+## 4) System Architecture
+
+High-level layers:
+1. Presentation Layer: Streamlit pages and reusable components.
+2. Analysis Layer: Volatility wrapper, anomaly detector, MITRE mapper.
+3. AI Layer: Provider routing and context-constrained responses.
+4. Reporting Layer: FPDF report generation.
+5. Runtime Layer: setup and launch scripts, logs, environment config.
+
+Execution flow:
+1. User starts app via run.sh.
+2. Home page validates evidence and selected plugins.
+3. Background worker executes plugins and updates progress state.
+4. Detector builds Finding objects from plugin output.
+5. Mapper derives ATT&CK summaries.
+6. Pages render findings, charts, and export surfaces.
+7. Report module produces downloadable PDF.
+
+---
+
+## 5) Current Feature Set
+
+1. Real memory-dump validation and hashing (MD5/SHA-256).
+2. Configurable plugin execution with preset-based plugin selector.
+3. Process, network, injection, DLL, and persistence heuristic detections.
+4. MITRE ATT&CK table plus tactic/technique heatmap.
+5. Timeline and graph-based forensic visualization.
+6. AI Analyst page with quick actions and free-form Q&A.
+7. IOC extraction and plaintext export.
+8. Four report types:
+	1. Executive Summary
+	2. Technical Analysis
+	3. IOC Report
+	4. MITRE ATT&CK Report
+
+---
+
+## 6) Repository Layout
+
+```text
+VolatileAI/
+├── app.py
+├── config.py
+├── run.sh
+├── setup.sh
+├── requirements.txt
+├── README.md
+├── DOCUMENTATION.md
+├── .env.example
+├── .streamlit/config.toml
+├── core/
+│   ├── ai_engine.py
+│   ├── anomaly_detector.py
+│   ├── mitre_mapper.py
+│   ├── scenario_loader.py
+│   └── volatility_engine.py
+├── ui/
+│   ├── components/
+│   │   ├── charts.py
+│   │   └── metrics.py
+│   ├── pages/
+│   │   ├── home.py
+│   │   ├── dashboard.py
+│   │   ├── process_analysis.py
+│   │   ├── network_analysis.py
+│   │   ├── mitre_page.py
+│   │   ├── timeline_page.py
+│   │   ├── ai_chat.py
+│   │   ├── ioc_summary.py
+│   │   └── reports_page.py
+│   └── styles/theme.css
+├── reports/
+│   ├── report_generator.py
+│   └── output/
+├── evidence/
+└── logs/
+```
+
+For a complete file-by-file behavior reference, see DOCUMENTATION.md.
+
+---
+
+## 7) Quick Start
 
 ```bash
-cd volatile_ai
-
-# Setup
+cd /home/shivam/Major/VolatileAI
 chmod +x setup.sh run.sh
 ./setup.sh
-
-# Run
 ./run.sh
 ```
 
-Open **http://localhost:8502** in your browser.
+Default app URL: http://localhost:8502
 
-## Demo Scenarios
+---
 
-Five pre-built attack scenarios with realistic synthetic Volatility output for testing:
+## 8) Configuration
 
-If you remove those JSON files, the app will show no demo scenarios until you add new files to `idata/demo_scenarios/`.
-
-| Scenario | Description |
-|----------|-------------|
-| **Mimikatz Credential Theft** | Spear-phishing → Word macro → Mimikatz → lateral movement |
-| **Fileless Malware** | HTA → PowerShell Empire → process hollowing → WMI persistence |
-| **Ransomware Deployment** | RDP brute-force → AV kill → PsExec lateral → encryption |
-| **Supply Chain Rootkit** | Trojanized installer → kernel rootkit → DNS tunneling |
-| **APT Multi-Stage** | Watering hole → staged payloads → credential harvest → exfiltration |
-
-## Architecture
-
-```
-volatile_ai/
-├── app.py                    # Streamlit entry point
-├── config.py                 # Configuration and constants
-├── core/
-│   ├── volatility_engine.py  # Volatility 3 integration
-│   ├── anomaly_detector.py   # Heuristic anomaly detection
-│   ├── mitre_mapper.py       # MITRE ATT&CK mapping
-│   ├── ai_engine.py          # AI/Ollama integration with caching
-│   └── scenario_loader.py    # Demo scenario management
-├── ui/
-│   ├── styles/theme.css      # Dark forensics theme
-│   ├── components/           # Reusable chart and metric components
-│   └── pages/                # 9 analysis pages
-├── idata/
-│   ├── demo_scenarios/       # 5 attack scenario datasets
-│   └── cached_responses/     # 118+ cached AI responses
-├── reports/
-│   └── report_generator.py   # PDF report generation
-└── evidence/                 # Place memory dumps here
-```
-
-## Using with Real Memory Dumps
-
-1. Place your memory dump file in any accessible directory
-2. Open the app and go to "Home & Evidence"
-3. Paste the full path to your dump file
-4. Click "Validate & Load"
-5. If Volatility 3 is installed, real plugins will run automatically
-
-## AI Analysis
-
-VolatileAI now supports multiple AI providers via environment variables:
-
-- `ollama` (default)
-- `openai`
-- `anthropic` (Claude)
-- `groq`
-- `opentext` (OpenAI-compatible endpoint)
-
-Set provider:
+Create local runtime config:
 
 ```bash
-export VOLATILEAI_AI_PROVIDER=ollama
+cp .env.example .env
 ```
 
-### Ollama Setup (Local)
-
-Install Ollama and pull a small model:
+Primary runtime provider switch:
 
 ```bash
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull phi3:mini
-ollama serve
+VOLATILEAI_AI_PROVIDER=ollama
 ```
 
-### API Provider Setup Examples
+Allowed values:
+1. ollama
+2. openai
+3. anthropic
+4. groq
+5. opentext
 
-OpenAI:
+The launcher automatically loads .env.
+
+---
+
+## 9) Evidence and Analysis Workflow
+
+1. Open Home page.
+2. Enter absolute memory dump path.
+3. Select plugin profile:
+	1. Quick Triage
+	2. Full Analysis
+	3. Network Focus
+	4. Injection Focus
+	5. Custom
+4. Click Validate & Load.
+5. Wait for plugin progress and completion summary.
+6. Investigate findings across Dashboard, Process, Network, MITRE, Timeline, IOC, AI, and Reports pages.
+
+You can run multiple analyses in one app session using Clear Current.
+
+---
+
+## 10) Methodology (For Paper Writing)
+
+### 10.1 Data Acquisition
+
+Volatility plugins are executed sequentially on the memory image. Results are captured as structured JSON row arrays and normalized into PluginResult objects.
+
+### 10.2 Detection Logic
+
+Heuristic rules evaluate:
+1. Process relationships and expected parent/path baselines.
+2. Suspicious interpreter and command-line patterns.
+3. Network indicators (endpoint deduplication, suspicious/listening ports, beaconing frequency).
+4. Injection signals from malfind output.
+5. DLL and service path anomalies.
+
+### 10.3 Risk Scoring and Triage
+
+Each finding receives:
+1. Risk score (0 to 10).
+2. Risk level band (critical/high/medium/low).
+3. Triage status (malicious/review/informational semantics where applicable).
+
+### 10.4 ATT&CK Mapping
+
+Findings carry MITRE IDs that are grouped by technique and tactic for:
+1. KPI computation.
+2. Heatmap/table rendering.
+3. ATT&CK report generation.
+
+### 10.5 AI Assistance
+
+The AI layer receives constrained context:
+1. Findings summary.
+2. Plugin evidence summary.
+3. Confirmed ATT&CK ID list.
+
+Provider routes support offline-safe fallback messaging and transient/rate-limit backoff for live API calls.
+
+---
+
+## 11) Evaluation Plan You Can Use in a Paper
+
+### 11.1 Detection Utility
+
+1. Use labeled or manually validated memory cases.
+2. Measure precision-like behavior over top-N findings.
+3. Track false-positive changes after rule tuning.
+
+### 11.2 Analyst Efficiency
+
+1. Time-to-triage: raw Volatility workflow vs VolatileAI workflow.
+2. Time-to-report: manual report drafting vs built-in PDF export.
+3. Number of manual correlation steps per case.
+
+### 11.3 Explainability
+
+Assess whether each finding includes:
+1. Artifact specificity (PID/IP/path/cmdline).
+2. ATT&CK context.
+3. Confidence-appropriate language in AI output.
+
+### 11.4 Suggested Quantitative Metrics
+
+1. Mean triage time per case.
+2. Finding precision at top 5 and top 10.
+3. Report generation time.
+4. ATT&CK coverage count (techniques/tactics).
+5. Reviewer agreement score for AI narrative correctness.
+
+---
+
+## 12) Reproducibility Checklist
+
+1. Bootstrap environment:
 
 ```bash
-export VOLATILEAI_AI_PROVIDER=openai
-export OPENAI_API_KEY=your_key_here
-export OPENAI_MODEL=gpt-4o-mini
+./setup.sh
 ```
 
-Anthropic (Claude):
+2. Verify Volatility command path:
 
 ```bash
-export VOLATILEAI_AI_PROVIDER=anthropic
-export ANTHROPIC_API_KEY=your_key_here
-export ANTHROPIC_MODEL=claude-3-5-haiku-latest
+source venv/bin/activate
+vol -h >/dev/null && echo "vol OK" || echo "vol missing"
 ```
 
-Groq:
+3. Start app:
 
 ```bash
-export VOLATILEAI_AI_PROVIDER=groq
-export GROQ_API_KEY=your_key_here
-export GROQ_MODEL=llama-3.1-8b-instant
+./run.sh
 ```
 
-OpenText (OpenAI-compatible API):
+4. Verify localhost-only bind:
 
 ```bash
-export VOLATILEAI_AI_PROVIDER=opentext
-export OPENTEXT_API_KEY=your_key_here
-export OPENTEXT_BASE_URL=https://your-opentext-endpoint/v1
-export OPENTEXT_MODEL=gpt-4o-mini
+ss -ltnp | grep 8502 || true
 ```
 
-### Good Low-Cost / Free-Tier Friendly Models
+5. Validate no deprecated cache API usage:
 
-- Local Ollama: `phi3:mini`, `qwen2.5:3b`, `llama3.2:3b`, `gemma2:2b`
-- Groq (often generous free tier): `llama-3.1-8b-instant`
-- OpenAI (paid, lower cost): `gpt-4o-mini`
-- Anthropic (paid, lower cost): `claude-3-5-haiku-latest`
+```bash
+grep -rn "st.cache" .
+```
 
-## Tech Stack
+6. Run compile sanity:
 
-- **Streamlit** — Interactive web UI
-- **Plotly** — Interactive forensic visualizations
-- **Volatility 3** — Memory forensics framework
-- **Ollama / Phi-3 Mini** — Local AI analysis
-- **fpdf2** — PDF report generation
-- **NetworkX** — Network graph analysis
-- **Pandas / NumPy** — Data processing
+```bash
+source venv/bin/activate
+python3 -m compileall -q app.py config.py core ui reports
+```
 
-## Requirements
+7. UI smoke-test all nine pages and generate one technical PDF.
 
-- Python 3.9+
-- 4GB+ RAM (8GB+ recommended with Ollama)
-- macOS / Linux / Windows
-- Intel or Apple Silicon Mac compatible
-# VolatileAI
+8. Archive logs from logs directory for experiment traceability.
+
+---
+
+## 13) Security and Operational Notes
+
+1. Keep .env private; never commit secrets.
+2. Memory dumps can contain credentials and sensitive host data.
+3. Default localhost bind reduces accidental exposure.
+4. Generated reports should be handled as confidential artifacts.
+
+---
+
+## 14) Known Limitations (v1.0)
+
+1. Suspicious ports list may include 8888 by default; tune VOLATILEAI_SUSPICIOUS_PORTS for developer workstation images.
+2. Evidence hash generation is synchronous and may delay UX on very large dumps.
+3. This release is Windows-memory focused by design.
+4. Plugin execution is sequential (no parallel scheduling).
+5. ATT&CK catalog is static in code and not auto-synced from upstream ATT&CK releases.
+
+---
+
+## 15) Troubleshooting
+
+1. App does not start:
+
+```bash
+source venv/bin/activate
+pip install -r requirements.txt
+./run.sh
+```
+
+2. Volatility command missing:
+
+```bash
+source venv/bin/activate
+pip install volatility3
+python3 -m volatility3 -h | head
+```
+
+3. AI provider unavailable:
+1. Check provider value in .env.
+2. Confirm API key and base URL.
+3. For Ollama, verify service and model availability.
+4. Review logs for auth/network/rate-limit errors.
+
+4. Direct page URL opens a blank page:
+1. This is expected in the current Streamlit navigation model used by this app.
+2. Routes such as /Dashboard or /Process_Analysis are not independent deep-linkable views.
+3. Open the root app URL and navigate using the sidebar page selector.
+4. Treat this as expected behavior, not a product defect.
+
+---
+
+## 16) Citation / Project Description Snippet
+
+Use this short paragraph in reports or paper appendices:
+
+VolatileAI is a Streamlit-based memory forensics platform that integrates Volatility 3 plugin orchestration, deterministic anomaly detection, MITRE ATT&CK mapping, AI-assisted investigative analysis, and PDF report generation. It is optimized for Windows memory incident-response workflows and emphasizes explainability, reproducibility, and analyst productivity.
+
+---
+
+## 17) Additional Technical Reference
+
+For full function-by-function and file-by-file internals, see DOCUMENTATION.md.

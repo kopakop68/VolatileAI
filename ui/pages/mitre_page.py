@@ -7,7 +7,7 @@ from ui.components.charts import create_mitre_heatmap
 
 
 def render_mitre():
-    page_header("MITRE ATT&CK Mapping", icon="🛡️")
+    page_header("MITRE ATT&CK Mapping", icon="")
 
     if "findings" not in st.session_state or not st.session_state.findings:
         info_banner("Load evidence first to view MITRE ATT&CK mappings.", type_="warning")
@@ -21,20 +21,23 @@ def render_mitre():
     total_techniques = len(detected_techniques)
     tactics_covered = len([t for t, techs in tactic_data.items() if techs])
     highest_severity_tech = max(detected_techniques, key=lambda t: t.get("max_severity", 0), default=None)
-    highest_label = highest_severity_tech.get("name", "N/A") if highest_severity_tech else "N/A"
+    if highest_severity_tech:
+        highest_label = highest_severity_tech.get("technique_id", "N/A")
+    else:
+        highest_label = "N/A"
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        stat_card("Total Techniques Detected", total_techniques, color="#ef4444", icon="🎯")
+        stat_card("Total Techniques", total_techniques, color="#ef4444")
     with c2:
-        stat_card("Tactics Covered", tactics_covered, color="#f97316", icon="📊")
+        stat_card("Tactics Covered", tactics_covered, color="#f97316")
     with c3:
-        stat_card("Highest Severity Technique", highest_label, color="#eab308", icon="⚡")
+        stat_card("Highest Severity", highest_label, color="#eab308")
 
     st.markdown("")
 
     fig = create_mitre_heatmap(tactic_data)
-    st.plotly_chart(fig, use_container_width=True, key="mitre_heatmap")
+    st.plotly_chart(fig, width="stretch", key="mitre_heatmap")
 
     st.markdown("---")
     st.markdown("### Detected Techniques")
@@ -52,11 +55,11 @@ def render_mitre():
             else:
                 sev_label = "Low"
             rows.append({
-                "Technique ID": tech.get("technique_id", ""),
+                "Technique": tech.get("technique_id", ""),
                 "Name": tech.get("name", ""),
                 "Tactic": tech.get("tactic", ""),
-                "Finding Count": tech.get("finding_count", 0),
-                "Max Severity": sev_label,
+                "Count": tech.get("finding_count", 0),
+                "Severity": sev_label,
                 "Description": tech.get("description", "")[:120],
             })
 
@@ -71,8 +74,20 @@ def render_mitre():
             }
             return colors.get(val, "")
 
-        styled = df.style.applymap(_color_severity, subset=["Max Severity"])
-        st.dataframe(styled, use_container_width=True, hide_index=True)
+        styled = df.style.map(_color_severity, subset=["Severity"])
+        st.dataframe(
+            styled,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "Technique": st.column_config.TextColumn(width="small"),
+                "Name": st.column_config.TextColumn(width="medium"),
+                "Tactic": st.column_config.TextColumn(width="small"),
+                "Count": st.column_config.NumberColumn(width="small"),
+                "Severity": st.column_config.TextColumn(width="small"),
+                "Description": st.column_config.TextColumn(width="large"),
+            },
+        )
     else:
         info_banner("No MITRE techniques detected in current findings.", type_="info")
         return
@@ -86,13 +101,13 @@ def render_mitre():
         severity = tech.get("max_severity", 0)
 
         if severity >= 8:
-            badge = "🔴 Critical"
+            badge = "Critical"
         elif severity >= 6:
-            badge = "🟠 High"
+            badge = "High"
         elif severity >= 4:
-            badge = "🟡 Medium"
+            badge = "Medium"
         else:
-            badge = "🟢 Low"
+            badge = "Low"
 
         with st.expander(f"{tech_id} — {name}  |  {badge}"):
             st.markdown(f"**Description:** {tech.get('description', 'No description available.')}")

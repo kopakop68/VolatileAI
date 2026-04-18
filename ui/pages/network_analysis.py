@@ -7,7 +7,7 @@ from ui.components.charts import create_network_graph
 
 
 def render_network_analysis():
-    page_header("Network Analysis", subtitle="Explore network connections, remote endpoints, and suspicious traffic", icon="🌐")
+    page_header("Network Analysis", subtitle="Explore network connections, remote endpoints, and suspicious traffic", icon="")
 
     if not st.session_state.get("evidence_loaded"):
         info_banner("Load a memory image from the sidebar to begin network analysis.")
@@ -27,31 +27,41 @@ def render_network_analysis():
 
     remote_ips = set()
     unique_ports = set()
+
+    def _is_loopback_or_local(addr: str) -> bool:
+        normalized = str(addr).strip().lower()
+        if normalized.startswith("[") and normalized.endswith("]"):
+            normalized = normalized[1:-1]
+        if "%" in normalized:
+            normalized = normalized.split("%", 1)[0]
+        return normalized in {"", "0.0.0.0", "::", "::1", "*", "-", "127.0.0.1", "localhost"}
+
     for conn in connections:
         raddr = str(conn.get("ForeignAddr") or conn.get("foreign_addr") or "")
         rport = conn.get("ForeignPort") or conn.get("foreign_port")
-        if raddr and raddr not in ("0.0.0.0", "::", "*", "-", "127.0.0.1"):
+        if raddr and not _is_loopback_or_local(raddr):
             remote_ips.add(raddr)
         if rport and str(rport) not in ("0", "*", "-"):
             unique_ports.add(rport)
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        stat_card("Total Connections", len(connections), color="#38bdf8", icon="🔗")
+        stat_card("Total Connections", len(connections), color="#38bdf8")
     with c2:
-        stat_card("Unique Remote IPs", len(remote_ips), color="#818cf8", icon="🌍")
+        stat_card("Unique Remote IPs", len(remote_ips), color="#818cf8")
     with c3:
-        stat_card("Suspicious", len(network_findings), color="#ef4444", icon="🚨")
+        stat_card("Suspicious", len(network_findings), color="#ef4444")
     with c4:
-        stat_card("Unique Ports", len(unique_ports), color="#f97316", icon="🔌")
+        stat_card("Unique Ports", len(unique_ports), color="#f97316")
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
-    tab_graph, tab_details = st.tabs(["🕸️ Network Graph", "📋 Connection Details"])
+    tab_graph, tab_details = st.tabs(["Network Graph", "Connection Details"])
 
     with tab_graph:
         fig = create_network_graph(connections)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
+        st.caption("Graph colors: blue = local address, orange = external address (not automatically malicious).")
 
         st.markdown("""
         <div style='display:flex;gap:24px;justify-content:center;padding:0.4rem 0 0.6rem 0;flex-wrap:wrap'>
@@ -60,8 +70,8 @@ def render_network_analysis():
                 <span style='color:#94a3b8;font-size:0.82rem'>Local Address</span>
             </div>
             <div style='display:flex;align-items:center;gap:6px'>
-                <span style='display:inline-block;width:12px;height:12px;border-radius:50%;background:#ef4444'></span>
-                <span style='color:#94a3b8;font-size:0.82rem'>Remote Address</span>
+                <span style='display:inline-block;width:12px;height:12px;border-radius:50%;background:#f97316'></span>
+                <span style='color:#94a3b8;font-size:0.82rem'>External Address</span>
             </div>
             <div style='display:flex;align-items:center;gap:6px'>
                 <span style='display:inline-block;width:18px;height:2px;background:rgba(148,163,184,0.4)'></span>
@@ -75,7 +85,6 @@ def render_network_analysis():
         all_pids = set()
         for conn in connections:
             proto = conn.get("Proto") or conn.get("protocol") or ""
-            local_addr = conn.get("LocalAddr") or conn.get("local_addr") or ""
             local_port = conn.get("LocalPort") or conn.get("local_port") or ""
             remote_addr = conn.get("ForeignAddr") or conn.get("foreign_addr") or ""
             remote_port = conn.get("ForeignPort") or conn.get("foreign_port") or ""
@@ -89,14 +98,13 @@ def render_network_analysis():
                 all_pids.add(str(pid))
 
             rows.append({
-                "Protocol": proto,
-                "Local Address": local_addr,
-                "Local Port": local_port,
-                "Remote Address": remote_addr,
-                "Remote Port": remote_port,
-                "State": state,
-                "PID": pid,
-                "Owner": owner,
+                "Protocol": str(proto),
+                "Local Port": "" if local_port is None else str(local_port),
+                "Remote Address": str(remote_addr),
+                "Remote Port": "" if remote_port is None else str(remote_port),
+                "State": str(state),
+                "PID": "" if pid is None else str(pid),
+                "Owner": str(owner),
             })
 
         df = pd.DataFrame(rows)
@@ -123,14 +131,20 @@ def render_network_analysis():
         if selected_pids:
             filtered_df = filtered_df[filtered_df["PID"].astype(str).isin(selected_pids)]
 
-        suspicious_remotes = {
-            f.artifact_id for f in network_findings
-        }
+        suspicious_remote_ips = set()
+        suspicious_listen_pids = set()
+        for finding in network_findings:
+            evidence = finding.evidence if isinstance(finding.evidence, dict) else {}
+            remote_ip = str(evidence.get("ForeignAddr") or evidence.get("foreign_addr") or evidence.get("RemoteAddr") or "").strip()
+            if remote_ip:
+                suspicious_remote_ips.add(remote_ip)
+            if finding.title.lower().startswith("listening on suspicious port"):
+                suspicious_listen_pids.add(finding.artifact_id.replace("PID:", ""))
 
         def _highlight_conn(row):
             remote = str(row.get("Remote Address", ""))
             pid = str(row.get("PID", ""))
-            if f"CONN:{remote}" in suspicious_remotes or f"PID:{pid}" in suspicious_remotes:
+            if remote in suspicious_remote_ips or pid in suspicious_listen_pids:
                 return ["background-color: rgba(239,68,68,0.12); color: #fca5a5"] * len(row)
             state = str(row.get("State", "")).upper()
             if state == "ESTABLISHED":
@@ -138,7 +152,21 @@ def render_network_analysis():
             return [""] * len(row)
 
         styled = filtered_df.style.apply(_highlight_conn, axis=1)
-        st.dataframe(styled, use_container_width=True, height=min(500, 40 + len(filtered_df) * 35))
+        st.dataframe(
+            styled,
+            width="stretch",
+            hide_index=True,
+            height=min(500, 40 + len(filtered_df) * 35),
+            column_config={
+                "Protocol": st.column_config.TextColumn(width="small"),
+                "Local Port": st.column_config.TextColumn(width="small"),
+                "Remote Address": st.column_config.TextColumn(width="medium"),
+                "Remote Port": st.column_config.TextColumn(width="medium"),
+                "State": st.column_config.TextColumn(width="small"),
+                "PID": st.column_config.TextColumn(width="medium"),
+                "Owner": st.column_config.TextColumn(width="small"),
+            },
+        )
 
         st.markdown(
             f"<div style='color:#64748b;font-size:0.78rem;text-align:right;padding:2px 4px'>"
@@ -147,7 +175,7 @@ def render_network_analysis():
         )
 
         st.markdown("---")
-        st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>🚨 Suspicious Connections</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>Suspicious Connections</h4>", unsafe_allow_html=True)
 
         if not network_findings:
             info_banner("No suspicious network activity detected.", type_="success")
@@ -158,6 +186,7 @@ def render_network_analysis():
                     description=finding.description,
                     risk_score=finding.risk_score,
                     category=finding.category,
-                    techniques=getattr(finding, "techniques", []),
+                    techniques=finding.mitre_techniques,
                     evidence_id=finding.artifact_id,
+                    triage_status=getattr(finding, "triage_status", ""),
                 )

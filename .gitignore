@@ -8,3 +8,5 @@ evidence/*.vmem
 evidence/*.dmp
 evidence/*.mem
 evidence/*.lime
+.env
+logs/

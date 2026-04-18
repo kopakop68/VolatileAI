@@ -2,7 +2,7 @@
 
 import streamlit as st
 import pandas as pd
-from ui.components.metrics import page_header, info_banner, finding_card, risk_badge
+from ui.components.metrics import page_header, info_banner, finding_card
 from ui.components.charts import create_process_tree
 
 SUSPICIOUS_PARENTS = {
@@ -12,6 +12,12 @@ SUSPICIOUS_PARENTS = {
     "lsass.exe": ["wininit.exe"],
     "csrss.exe": ["smss.exe"],
     "winlogon.exe": ["smss.exe"],
+    "python.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "pythonw.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "python3.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "node.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "perl.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "ruby.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
 }
 
 
@@ -19,13 +25,20 @@ def _has_suspicious_parent(name: str, ppid: int, pid_map: dict) -> bool:
     name_lower = name.lower()
     if name_lower not in SUSPICIOUS_PARENTS:
         return False
+
+    if name_lower in {"csrss.exe", "winlogon.exe"}:
+        parent = pid_map.get(ppid, {})
+        parent_name = (parent.get("ImageFileName") or parent.get("Name") or parent.get("name") or "").lower()
+        if not parent_name or parent_name == "unknown" or parent_name == "smss.exe":
+            return False
+
     parent = pid_map.get(ppid, {})
     parent_name = (parent.get("ImageFileName") or parent.get("Name") or parent.get("name") or "").lower()
-    return parent_name not in [p.lower() for p in SUSPICIOUS_PARENTS[name_lower]]
+    return parent_name in [p.lower() for p in SUSPICIOUS_PARENTS[name_lower]]
 
 
 def render_process_analysis():
-    page_header("Process Analysis", subtitle="Inspect running processes, parent relationships, and suspicious behavior", icon="⚙️")
+    page_header("Process Analysis", subtitle="Inspect running processes, parent relationships, and suspicious behavior", icon="")
 
     if not st.session_state.get("evidence_loaded"):
         info_banner("Load a memory image from the sidebar to begin process analysis.")
@@ -65,7 +78,7 @@ def render_process_analysis():
         if f.category == "process"
     }
 
-    tab_tree, tab_details = st.tabs(["🌳 Process Tree", "📋 Process Details"])
+    tab_tree, tab_details = st.tabs(["Process Tree", "Process Details"])
 
     with tab_tree:
         for p in processes:
@@ -73,7 +86,7 @@ def render_process_analysis():
             p["_risk_score"] = risk_scores.get(f"PID:{pid}", 0)
 
         fig = create_process_tree(processes)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         st.markdown("""
         <div style='display:flex;gap:18px;justify-content:center;padding:0.4rem 0 0.6rem 0;flex-wrap:wrap'>
@@ -85,20 +98,19 @@ def render_process_analysis():
 
     with tab_details:
         rows = []
+        expected_session_init = []
         for p in processes:
             pid = p.get("PID") or p.get("pid")
             ppid = p.get("PPID") or p.get("ppid")
             name = p.get("ImageFileName") or p.get("Name") or p.get("name") or ""
             create_time = p.get("CreateTime") or p.get("create_time") or ""
             threads = p.get("Threads") or p.get("threads") or ""
-            handles = p.get("Handles") or p.get("handles") or ""
             rows.append({
-                "PID": pid,
-                "PPID": ppid,
-                "Name": name,
+                "PID": "" if pid is None else str(pid),
+                "PPID": "" if ppid is None else str(ppid),
+                "Name": str(name),
                 "Create Time": str(create_time),
-                "Threads": threads,
-                "Handles": handles,
+                "Threads": "" if threads is None else str(threads),
             })
 
         df = pd.DataFrame(rows)
@@ -106,19 +118,22 @@ def render_process_analysis():
 
             def _highlight_suspicious(row):
                 name = str(row.get("Name", ""))
-                ppid = row.get("PPID")
+                ppid_raw = str(row.get("PPID", "")).strip()
+                ppid = int(ppid_raw) if ppid_raw.isdigit() else None
+                if name.lower() in {"csrss.exe", "winlogon.exe", "wininit.exe"}:
+                    return [""] * len(row)
                 if ppid is not None and _has_suspicious_parent(name, ppid, pid_map):
                     return ["background-color: rgba(239,68,68,0.15); color: #fca5a5"] * len(row)
-                pid = row.get("PID")
+                pid = str(row.get("PID", "")).strip()
                 if f"PID:{pid}" in risk_scores and risk_scores[f"PID:{pid}"] >= 6:
                     return ["background-color: rgba(249,115,22,0.12); color: #fdba74"] * len(row)
                 return [""] * len(row)
 
             styled_df = df.style.apply(_highlight_suspicious, axis=1)
-            st.dataframe(styled_df, use_container_width=True, height=min(400, 40 + len(df) * 35))
+            st.dataframe(styled_df, width="stretch", height=min(400, 40 + len(df) * 35))
 
         st.markdown("---")
-        st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>🚨 Suspicious Processes</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>Suspicious Processes</h4>", unsafe_allow_html=True)
 
         suspicious = [f for f in process_findings.values()]
         if not suspicious:
@@ -130,8 +145,9 @@ def render_process_analysis():
                     description=finding.description,
                     risk_score=finding.risk_score,
                     category=finding.category,
-                    techniques=getattr(finding, "techniques", []),
+                    techniques=finding.mitre_techniques,
                     evidence_id=finding.artifact_id,
+                    triage_status=getattr(finding, "triage_status", ""),
                 )
 
                 pid_str = finding.artifact_id.replace("PID:", "")
@@ -150,10 +166,19 @@ def render_process_analysis():
                     </div>""", unsafe_allow_html=True)
 
         flagged_parents = []
+        expected_session_init = []
         for p in processes:
             pid = p.get("PID") or p.get("pid")
             ppid = p.get("PPID") or p.get("ppid")
             name = p.get("ImageFileName") or p.get("Name") or p.get("name") or ""
+            if name.lower() in {"csrss.exe", "winlogon.exe"} and (ppid is None or not _has_suspicious_parent(name, ppid, pid_map)):
+                expected_session_init.append({
+                    "pid": pid,
+                    "name": name,
+                    "ppid": ppid,
+                })
+                continue
+
             if ppid is not None and _has_suspicious_parent(name, ppid, pid_map):
                 parent_info = pid_map.get(ppid, {})
                 parent_name = parent_info.get("ImageFileName") or parent_info.get("Name") or parent_info.get("name") or "unknown"
@@ -166,7 +191,7 @@ def render_process_analysis():
 
         if flagged_parents:
             st.markdown("---")
-            st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>🔗 Unusual Parent-Child Relationships</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>Unusual Parent-Child Relationships</h4>", unsafe_allow_html=True)
             for fp in flagged_parents:
                 st.markdown(f"""
                 <div style='background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);
@@ -176,5 +201,12 @@ def render_process_analysis():
                     <span style='color:#94a3b8'> ← spawned by </span>
                     <span style='color:#fca5a5;font-weight:700'>{fp['parent_name']}</span>
                     <span style='color:#64748b'> (PID {fp['ppid']})</span>
-                    <span style='color:#ef4444;margin-left:8px;font-size:0.75rem'>⚠ Unexpected parent</span>
+                    <span style='color:#ef4444;margin-left:8px;font-size:0.75rem'>Unexpected parent</span>
                 </div>""", unsafe_allow_html=True)
+
+        if expected_session_init:
+            st.markdown("---")
+            info_banner(
+                "csrss.exe and winlogon.exe entries with a missing or self-terminated smss.exe parent are expected during Windows session initialization.",
+                type_="info",
+            )
