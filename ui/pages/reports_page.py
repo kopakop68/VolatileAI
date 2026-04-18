@@ -103,38 +103,35 @@ def render_reports():
             unsafe_allow_html=True,
         )
 
-        org_name = st.text_input("Organization Name", placeholder="Acme Corporation")
-        analyst_name = st.text_input("Analyst Name", placeholder="Jane Smith")
-        case_number = st.text_input("Case Number", placeholder="CASE-2026-0001")
+        org_name = st.text_input("Organization Name", value="", placeholder="Organization name (optional)")
+        analyst_name = st.text_input("Analyst Name", value="", placeholder="Analyst name (optional)")
+        case_number = st.text_input("Case Number", value="", placeholder="CASE-2026-0001")
 
         st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
         if st.button("Generate Report", type="primary", width="stretch"):
-            if not case_number.strip():
-                st.warning("Please provide a case number.")
-            else:
-                with st.spinner("Generating report — this may take a moment…"):
-                    try:
-                        from reports.report_generator import ReportGenerator
+            with st.spinner("Generating report — this may take a moment…"):
+                try:
+                    from reports.report_generator import ReportGenerator
 
-                        generator = ReportGenerator()
-                        pdf_bytes = generator.generate(
-                            report_type=report_type,
-                            findings=st.session_state.findings,
-                            plugin_results=st.session_state.plugin_results,
-                            evidence_info=st.session_state.evidence_info,
-                            org_name=org_name,
-                            analyst_name=analyst_name,
-                            case_number=case_number,
-                            scenario_name="Real Evidence",
-                            ai_engine=st.session_state.ai_engine,
-                            scenario_id=st.session_state.current_scenario or "",
-                        )
-                        st.session_state["_last_pdf"] = pdf_bytes
-                        st.session_state["_last_case"] = case_number
-                        info_banner("Report generated successfully!", type_="success")
-                    except Exception as e:
-                        st.error(f"Report generation failed: {e}")
+                    generator = ReportGenerator()
+                    pdf_bytes = generator.generate(
+                        report_type=report_type,
+                        findings=st.session_state.findings,
+                        plugin_results=st.session_state.plugin_results,
+                        evidence_info=st.session_state.evidence_info,
+                        org_name=org_name,
+                        analyst_name=analyst_name,
+                        case_number=case_number,
+                        scenario_name="Real Evidence",
+                        ai_engine=st.session_state.ai_engine,
+                        scenario_id=st.session_state.current_scenario or "",
+                    )
+                    st.session_state["_last_pdf"] = pdf_bytes
+                    st.session_state["_last_case"] = case_number or "report"
+                    info_banner("Report generated successfully!", type_="success")
+                except Exception as e:
+                    st.error(f"Report generation failed: {e}")
 
         if st.session_state.get("_last_pdf"):
             st.download_button(

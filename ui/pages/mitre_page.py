@@ -21,7 +21,10 @@ def render_mitre():
     total_techniques = len(detected_techniques)
     tactics_covered = len([t for t, techs in tactic_data.items() if techs])
     highest_severity_tech = max(detected_techniques, key=lambda t: t.get("max_severity", 0), default=None)
-    highest_label = highest_severity_tech.get("name", "N/A") if highest_severity_tech else "N/A"
+    if highest_severity_tech:
+        highest_label = highest_severity_tech.get("technique_id", "N/A")
+    else:
+        highest_label = "N/A"
 
     c1, c2, c3 = st.columns(3)
     with c1:

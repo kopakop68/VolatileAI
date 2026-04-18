@@ -1,5 +1,7 @@
 """VolatileAI — Investigation Dashboard page."""
 
+from html import escape
+
 import streamlit as st
 from ui.components.metrics import page_header, info_banner, stat_card, finding_card
 from ui.components.charts import create_risk_donut, create_category_bar
@@ -30,7 +32,7 @@ def render_dashboard():
     for f in findings:
         all_techniques.update(f.mitre_techniques)
     unique_techniques = len(all_techniques)
-    risk_score = max((f.risk_score for f in findings), default=0)
+    risk_score = sum(f.risk_score for f in findings) / total_findings if total_findings else 0
 
     # --- Top metrics ---
     m1, m2, m3, m4 = st.columns(4)
@@ -41,7 +43,7 @@ def render_dashboard():
     with m3:
         stat_card("MITRE Techniques", unique_techniques, color="#818cf8")
     with m4:
-        stat_card("Risk Score", f"{risk_score:.1f}", color="#f97316")
+        stat_card("Avg Risk Score", f"{risk_score:.1f}", color="#f97316")
 
     st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
 
@@ -154,14 +156,21 @@ def render_dashboard():
     actions = []
     for finding in top_three:
         if getattr(finding, "triage_status", "") == "review":
-            action = f"Review **{finding.title}** with human attention first ({finding.risk_score:.1f}/10) and confirm whether it is expected behavior or a true issue."
+            action = (
+                f"Review <strong>{escape(finding.title)}</strong> with human attention first "
+                f"({finding.risk_score:.1f}/10) and confirm whether it is expected behavior or a true issue."
+            )
             actions.append(action)
             continue
-        action = f"Review **{finding.title}** ({finding.risk_level.upper()}, {finding.risk_score:.1f}/10) and validate artifact `{finding.artifact_id}`."
+        action = (
+            f"Review <strong>{escape(finding.title)}</strong> "
+            f"({finding.risk_level.upper()}, {finding.risk_score:.1f}/10) and validate artifact "
+            f"<code>{escape(finding.artifact_id)}</code>."
+        )
         actions.append(action)
 
-    actions.append("Open the **AI Analyst** page for guided narrative and remediation recommendations.")
-    actions.append("Generate a **Technical Analysis Report** once critical findings are validated.")
+    actions.append("Open the <strong>AI Analyst</strong> page for guided narrative and remediation recommendations.")
+    actions.append("Generate a <strong>Technical Analysis Report</strong> once critical findings are validated.")
 
     action_html = "".join(f"<li style='margin:0.45rem 0'>{item}</li>" for item in actions)
 

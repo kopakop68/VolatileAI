@@ -144,9 +144,18 @@ def create_network_graph(connections: List[Dict]) -> go.Figure:
     if not connections:
         return go.Figure()
 
+    def _is_loopback_or_local(addr: str) -> bool:
+        normalized = str(addr).strip().lower()
+        if normalized.startswith("[") and normalized.endswith("]"):
+            normalized = normalized[1:-1]
+        if "%" in normalized:
+            normalized = normalized.split("%", 1)[0]
+        return normalized in {"", "0.0.0.0", "::", "::1", "*", "-", "127.0.0.1", "localhost"}
+
     local_ips = set()
     remote_ips = set()
     edges = []
+    node_types = {}
 
     for conn in connections:
         local = str(conn.get("LocalAddr") or conn.get("local_addr") or "")
@@ -154,17 +163,28 @@ def create_network_graph(connections: List[Dict]) -> go.Figure:
         pid = conn.get("PID") or conn.get("pid") or ""
         port = conn.get("ForeignPort") or conn.get("foreign_port") or ""
 
-        if remote and remote not in ("0.0.0.0", "::", "*", "-", "127.0.0.1"):
+        if local and _is_loopback_or_local(local):
+            node_types[local] = "local"
+        elif local:
+            node_types.setdefault(local, "local")
+
+        if remote and _is_loopback_or_local(remote):
+            local_ips.add(remote)
+            node_types[remote] = "local"
+            continue
+
+        if remote:
             local_ips.add(local)
             remote_ips.add(remote)
             edges.append((local, remote, pid, port))
+            node_types.setdefault(remote, "remote")
 
     import networkx as nx
     G = nx.Graph()
     for lip in local_ips:
-        G.add_node(lip, node_type="local")
+        G.add_node(lip, node_type=node_types.get(lip, "local"))
     for rip in remote_ips:
-        G.add_node(rip, node_type="remote")
+        G.add_node(rip, node_type=node_types.get(rip, "remote"))
     for l, r, pid, port in edges:
         G.add_edge(l, r, pid=pid, port=port)
 

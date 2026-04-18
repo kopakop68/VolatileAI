@@ -15,6 +15,7 @@ def render_ioc_summary():
     findings = st.session_state.findings
     suspicious_ips = set()
     suspicious_processes = set()
+    review_processes = set()
     suspicious_ports = set()
     suspicious_services = set()
     mitre_techniques = set()
@@ -38,8 +39,11 @@ def render_ioc_summary():
             if port and port != "0":
                 suspicious_ports.add(port)
         elif f.category in ("process", "injection"):
-            suspicious_processes.add(f.title)
-            process_scores[f.title] = f.risk_score
+            if getattr(f, "requires_manual_review", False):
+                review_processes.add(f.title)
+            else:
+                suspicious_processes.add(f.title)
+                process_scores[f.title] = f.risk_score
         elif f.category == "persistence":
             suspicious_services.add(f.title)
         for t in f.mitre_techniques:
@@ -53,7 +57,7 @@ def render_ioc_summary():
     with c2:
         stat_card("Suspicious IPs", len(suspicious_ips), color="#ef4444")
     with c3:
-        stat_card("Suspicious Processes", len(suspicious_processes), color="#f97316")
+        stat_card("Confirmed Processes", len(suspicious_processes), color="#f97316")
     with c4:
         stat_card("MITRE Techniques", len(mitre_techniques), color="#38bdf8")
 
@@ -110,6 +114,13 @@ def render_ioc_summary():
         else:
             info_banner("No suspicious processes detected.", type_="success")
 
+    if review_processes:
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+        info_banner(
+            f"{len(review_processes)} process/injection finding(s) are marked for human review and excluded from the confirmed IOC total.",
+            type_="warning",
+        )
+
     with tab_ports:
         if suspicious_ports:
             for port in sorted(suspicious_ports, key=lambda p: int(p) if p.isdigit() else 0):
@@ -163,6 +174,10 @@ def render_ioc_summary():
     if suspicious_processes:
         export_lines.append("# Suspicious Processes")
         export_lines.extend(sorted(suspicious_processes))
+        export_lines.append("")
+    if review_processes:
+        export_lines.append("# Review Processes")
+        export_lines.extend(sorted(review_processes))
         export_lines.append("")
     if suspicious_ports:
         export_lines.append("# Suspicious Ports")

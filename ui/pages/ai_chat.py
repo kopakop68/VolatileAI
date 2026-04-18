@@ -69,10 +69,11 @@ def render_ai_chat():
     )
 
     st.markdown("#### Quick Analysis")
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 1.15])
     with col1:
         if st.button("Auto Summary", width="stretch"):
-            response = ai_engine.get_auto_analysis(scenario_id)
+            with st.spinner("AI Analyst is analyzing findings..."):
+                response = ai_engine.get_auto_analysis(scenario_id)
             st.session_state.chat_history.append({
                 "role": "user",
                 "content": "Summarize the findings and provide an overall assessment",
@@ -81,7 +82,8 @@ def render_ai_chat():
             st.rerun()
     with col2:
         if st.button("Attack Narrative", width="stretch"):
-            response = ai_engine.get_attack_narrative(scenario_id)
+            with st.spinner("AI Analyst is analyzing findings..."):
+                response = ai_engine.get_attack_narrative(scenario_id)
             st.session_state.chat_history.append({
                 "role": "user",
                 "content": "Construct a narrative of the attack based on the evidence",
@@ -90,7 +92,8 @@ def render_ai_chat():
             st.rerun()
     with col3:
         if st.button("IOC List", width="stretch"):
-            response = ai_engine.get_ioc_list(scenario_id)
+            with st.spinner("AI Analyst is analyzing findings..."):
+                response = ai_engine.get_ioc_list(scenario_id)
             st.session_state.chat_history.append({
                 "role": "user",
                 "content": "List all indicators of compromise found in the evidence",
@@ -98,14 +101,21 @@ def render_ai_chat():
             st.session_state.chat_history.append({"role": "assistant", "content": response})
             st.rerun()
     with col4:
-        if st.button("Recommendations", width="stretch"):
-            response = ai_engine.get_recommendations(scenario_id)
+        if st.button("Fix Actions", width="stretch"):
+            with st.spinner("AI Analyst is analyzing findings..."):
+                response = ai_engine.get_recommendations(scenario_id)
             st.session_state.chat_history.append({
                 "role": "user",
                 "content": "What are your recommended remediation and response actions?",
             })
             st.session_state.chat_history.append({"role": "assistant", "content": response})
             st.rerun()
+
+    if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] == "assistant":
+        st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
+        info_banner("Latest AI response is ready below.", type_="success")
+        with st.container():
+            _render_chat_card("assistant", st.session_state.chat_history[-1]["content"])
 
     st.markdown("---")
 

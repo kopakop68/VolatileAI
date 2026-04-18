@@ -19,6 +19,13 @@ def _has_suspicious_parent(name: str, ppid: int, pid_map: dict) -> bool:
     name_lower = name.lower()
     if name_lower not in SUSPICIOUS_PARENTS:
         return False
+
+    if name_lower in {"csrss.exe", "winlogon.exe"}:
+        parent = pid_map.get(ppid, {})
+        parent_name = (parent.get("ImageFileName") or parent.get("Name") or parent.get("name") or "").lower()
+        if not parent_name or parent_name == "unknown" or parent_name == "smss.exe":
+            return False
+
     parent = pid_map.get(ppid, {})
     parent_name = (parent.get("ImageFileName") or parent.get("Name") or parent.get("name") or "").lower()
     return parent_name not in [p.lower() for p in SUSPICIOUS_PARENTS[name_lower]]
@@ -85,20 +92,19 @@ def render_process_analysis():
 
     with tab_details:
         rows = []
+        expected_session_init = []
         for p in processes:
             pid = p.get("PID") or p.get("pid")
             ppid = p.get("PPID") or p.get("ppid")
             name = p.get("ImageFileName") or p.get("Name") or p.get("name") or ""
             create_time = p.get("CreateTime") or p.get("create_time") or ""
             threads = p.get("Threads") or p.get("threads") or ""
-            handles = p.get("Handles") or p.get("handles") or ""
             rows.append({
                 "PID": "" if pid is None else str(pid),
                 "PPID": "" if ppid is None else str(ppid),
                 "Name": str(name),
                 "Create Time": str(create_time),
                 "Threads": "" if threads is None else str(threads),
-                "Handles": "" if handles is None else str(handles),
             })
 
         df = pd.DataFrame(rows)
@@ -108,6 +114,8 @@ def render_process_analysis():
                 name = str(row.get("Name", ""))
                 ppid_raw = str(row.get("PPID", "")).strip()
                 ppid = int(ppid_raw) if ppid_raw.isdigit() else None
+                if name.lower() in {"csrss.exe", "winlogon.exe", "wininit.exe"}:
+                    return [""] * len(row)
                 if ppid is not None and _has_suspicious_parent(name, ppid, pid_map):
                     return ["background-color: rgba(239,68,68,0.15); color: #fca5a5"] * len(row)
                 pid = str(row.get("PID", "")).strip()
@@ -116,7 +124,7 @@ def render_process_analysis():
                 return [""] * len(row)
 
             styled_df = df.style.apply(_highlight_suspicious, axis=1)
-            st.dataframe(styled_df, width="stretch", height=min(400, 40 + len(df) * 35))
+            st.dataframe(styled_df, use_container_width=True, height=min(400, 40 + len(df) * 35))
 
         st.markdown("---")
         st.markdown("<h4 style='color:#f1f5f9;font-weight:700'>Suspicious Processes</h4>", unsafe_allow_html=True)
@@ -151,10 +159,19 @@ def render_process_analysis():
                     </div>""", unsafe_allow_html=True)
 
         flagged_parents = []
+        expected_session_init = []
         for p in processes:
             pid = p.get("PID") or p.get("pid")
             ppid = p.get("PPID") or p.get("ppid")
             name = p.get("ImageFileName") or p.get("Name") or p.get("name") or ""
+            if name.lower() in {"csrss.exe", "winlogon.exe"} and (ppid is None or not _has_suspicious_parent(name, ppid, pid_map)):
+                expected_session_init.append({
+                    "pid": pid,
+                    "name": name,
+                    "ppid": ppid,
+                })
+                continue
+
             if ppid is not None and _has_suspicious_parent(name, ppid, pid_map):
                 parent_info = pid_map.get(ppid, {})
                 parent_name = parent_info.get("ImageFileName") or parent_info.get("Name") or parent_info.get("name") or "unknown"
@@ -179,3 +196,10 @@ def render_process_analysis():
                     <span style='color:#64748b'> (PID {fp['ppid']})</span>
                     <span style='color:#ef4444;margin-left:8px;font-size:0.75rem'>Unexpected parent</span>
                 </div>""", unsafe_allow_html=True)
+
+        if expected_session_init:
+            st.markdown("---")
+            info_banner(
+                "csrss.exe and winlogon.exe entries with a missing or self-terminated smss.exe parent are expected during Windows session initialization.",
+                type_="info",
+            )

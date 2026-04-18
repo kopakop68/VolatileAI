@@ -60,6 +60,7 @@ def _start_background_analysis(file_path: str, evidence):
                 progress_callback=_on_progress,
             )
             findings = detector.analyze_all(plugin_results)
+            confirmed_mitre = ", ".join(sorted({t for f in findings for t in f.mitre_techniques}))
 
             success_count = sum(1 for result in plugin_results.values() if result.success)
             non_empty_count = sum(1 for result in plugin_results.values() if result.success and result.row_count > 0)
@@ -133,7 +134,8 @@ def _apply_completed_analysis_if_needed():
     st.session_state.current_scenario = None
     st.session_state.analysis_complete = True
 
-    st.session_state.ai_engine.set_context(findings_text, f"Evidence: {evidence_filename}")
+    confirmed_mitre = ", ".join(sorted({t for finding in findings for t in getattr(finding, "mitre_techniques", [])}))
+    st.session_state.ai_engine.set_context(findings_text, f"Evidence: {evidence_filename}", confirmed_mitre)
     status["applied"] = True
 
 
@@ -279,22 +281,19 @@ def _render_evidence_loader():
         unsafe_allow_html=True,
     )
 
-    if "evidence_file_path" not in st.session_state:
-        st.session_state.evidence_file_path = ""
+    status = st.session_state.analysis_status
+    analysis_done = bool(st.session_state.get("analysis_complete")) or status.get("state") == "completed"
 
-    file_path = st.text_input(
-        "Evidence file path",
-        placeholder="/path/to/memory.raw",
-        key="evidence_file_path",
-        label_visibility="collapsed",
-    )
-
-    analysis_running = st.session_state.analysis_status.get("state") == "running"
-
-    if st.session_state.get("evidence_loaded"):
+    if st.session_state.get("evidence_loaded") or analysis_done:
+        st.markdown(
+            "<div style='color:#94a3b8;font-size:0.9rem;margin-bottom:0.75rem'>"
+            "Current evidence is loaded. Clear it first if you want to analyze a different dump."
+            "</div>",
+            unsafe_allow_html=True,
+        )
         clear_col, _ = st.columns([1, 3])
         with clear_col:
-            if st.button("Clear Current", width="stretch", disabled=analysis_running):
+            if st.button("Clear Current", width="stretch"):
                 st.session_state.evidence_loaded = False
                 st.session_state.evidence_info = None
                 st.session_state.plugin_results = {}
@@ -319,6 +318,19 @@ def _render_evidence_loader():
                     }
                 )
                 st.rerun()
+        return
+
+    if "evidence_file_path" not in st.session_state:
+        st.session_state.evidence_file_path = ""
+
+    file_path = st.text_input(
+        "Evidence file path",
+        placeholder="/path/to/memory.raw",
+        key="evidence_file_path",
+        label_visibility="collapsed",
+    )
+
+    analysis_running = status.get("state") == "running"
 
     if analysis_running:
         info_banner("Analysis is running in background. You can switch tabs safely.", "info")
@@ -329,7 +341,12 @@ def _render_evidence_loader():
             "warning",
         )
 
-    load_clicked = st.button("Validate & Load", type="primary", width="stretch", disabled=analysis_running)
+    load_clicked = st.button(
+        "Validate & Load",
+        type="primary",
+        width="stretch",
+        disabled=analysis_running or analysis_done,
+    )
 
     if load_clicked:
         if not file_path or not file_path.strip():

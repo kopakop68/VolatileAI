@@ -62,6 +62,12 @@ def _normalize_plugin_list(values: Iterable[Any], defaults: List[str]) -> List[s
     return deduped or defaults
 
 
+def _normalize_lowercase_list(values: Iterable[Any], defaults: List[str]) -> List[str]:
+    cleaned = [str(v).strip().lower() for v in values if isinstance(v, str) and str(v).strip()]
+    deduped = list(dict.fromkeys(cleaned))
+    return deduped or defaults
+
+
 def _normalize_ollama_url(url: str, default: str) -> str:
     candidate = (url or "").strip().rstrip("/")
     if not candidate:
@@ -228,10 +234,10 @@ _DEFAULT_VOLATILITY_PLUGINS_LINUX = list(VOLATILITY_PLUGINS_LINUX)
 
 WINDOWS_SYSTEM_PROCESSES = {
     "system": {"expected_path": "", "expected_parent": "idle", "expected_instances": 1},
-    "smss.exe": {"expected_path": r"\systemroot\system32\smss.exe", "expected_parent": "system", "expected_instances": 1},
-    "csrss.exe": {"expected_path": r"\systemroot\system32\csrss.exe", "expected_parent": "smss.exe", "expected_instances": 2},
+    "smss.exe": {"expected_path": r"\systemroot\system32\smss.exe", "expected_parent": "system", "expected_instances": -1},
+    "csrss.exe": {"expected_path": r"\systemroot\system32\csrss.exe", "expected_parent": "smss.exe", "expected_instances": -1},
     "wininit.exe": {"expected_path": r"\windows\system32\wininit.exe", "expected_parent": "smss.exe", "expected_instances": 1},
-    "winlogon.exe": {"expected_path": r"\windows\system32\winlogon.exe", "expected_parent": "smss.exe", "expected_instances": 1},
+    "winlogon.exe": {"expected_path": r"\windows\system32\winlogon.exe", "expected_parent": "smss.exe", "expected_instances": -1},
     "services.exe": {"expected_path": r"\windows\system32\services.exe", "expected_parent": "wininit.exe", "expected_instances": 1},
     "lsass.exe": {"expected_path": r"\windows\system32\lsass.exe", "expected_parent": "wininit.exe", "expected_instances": 1},
     "svchost.exe": {"expected_path": r"\windows\system32\svchost.exe", "expected_parent": "services.exe", "expected_instances": -1},
@@ -247,6 +253,10 @@ SUSPICIOUS_PARENTS = {
     "mshta.exe": ["winword.exe", "excel.exe", "outlook.exe"],
     "wscript.exe": ["winword.exe", "excel.exe", "outlook.exe"],
     "cscript.exe": ["winword.exe", "excel.exe", "outlook.exe"],
+    "python.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "pythonw.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "python3.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
+    "node.exe": ["services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"],
     "regsvr32.exe": ["winword.exe", "excel.exe", "cmd.exe", "powershell.exe"],
     "rundll32.exe": ["winword.exe", "excel.exe", "cmd.exe", "powershell.exe"],
     "certutil.exe": ["cmd.exe", "powershell.exe"],
@@ -260,8 +270,18 @@ BENIGN_INJECTION_PROCESSES = [
     "ftk imager.exe",
     "mrt.exe",
     "msmpeng.exe",
+    "mpdefendercore.exe",
+    "mpcmdrun.exe",
+    "mpsigstub.exe",
+    "am_delta.exe",
     "windefend.exe",
     "defender.exe",
+    "nisrv.exe",
+    "securityhealth.exe",
+    "vboxservice.exe",
+    "vboxtray.exe",
+    "codemeter.exe",
+    "codemrtcc.exe",
 ]
 
 _DEFAULT_BENIGN_INJECTION_PROCESSES = list(BENIGN_INJECTION_PROCESSES)
@@ -361,7 +381,7 @@ def validate_and_normalize_config() -> None:
     WINDOWS_SYSTEM_PROCESSES = _normalize_windows_processes(WINDOWS_SYSTEM_PROCESSES, _DEFAULT_WINDOWS_SYSTEM_PROCESSES)
     SUSPICIOUS_PARENTS = _normalize_map_of_string_lists(SUSPICIOUS_PARENTS, _DEFAULT_SUSPICIOUS_PARENTS)
     HOMOGLYPH_MAP = _normalize_homoglyph_map(HOMOGLYPH_MAP, _DEFAULT_HOMOGLYPH_MAP)
-    BENIGN_INJECTION_PROCESSES = _normalize_plugin_list(BENIGN_INJECTION_PROCESSES, _DEFAULT_BENIGN_INJECTION_PROCESSES)
+    BENIGN_INJECTION_PROCESSES = _normalize_lowercase_list(BENIGN_INJECTION_PROCESSES, _DEFAULT_BENIGN_INJECTION_PROCESSES)
 
     SUSPICIOUS_PORTS = _to_int_list(SUSPICIOUS_PORTS) or _DEFAULT_SUSPICIOUS_PORTS
     KNOWN_C2_PORTS = _to_int_list(KNOWN_C2_PORTS) or _DEFAULT_KNOWN_C2_PORTS

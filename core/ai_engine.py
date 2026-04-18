@@ -31,6 +31,7 @@ class AIEngine:
         self._provider = AI_PROVIDER
         self._active_base_url = OLLAMA_BASE_URL
         self._context_data: str = ""
+        self._confirmed_mitre_ids: str = ""
 
     @property
     def provider(self) -> str:
@@ -149,12 +150,18 @@ class AIEngine:
             "message": f"{self.provider_label} unavailable or missing API key — offline",
         }
 
-    def set_context(self, findings_summary: str, plugin_data_summary: str):
+    def set_context(self, findings_summary: str, plugin_data_summary: str, confirmed_mitre_ids: str = ""):
+        self._confirmed_mitre_ids = ", ".join(
+            item.strip() for item in str(confirmed_mitre_ids or "").split(",") if item.strip()
+        )
         self._context_data = f"""You are VolatileAI, an expert memory forensics analyst AI assistant. 
 You are analyzing a memory dump and have the following evidence:
 
 === ANALYSIS FINDINGS ===
 {findings_summary}
+
+=== CONFIRMED MITRE ATT&CK IDS ===
+{self._confirmed_mitre_ids or 'None confirmed yet'}
 
 === RAW EVIDENCE DATA ===
 {plugin_data_summary}
@@ -211,7 +218,10 @@ When answering questions:
             self.check_ollama()
 
         try:
-            prompt = f"{self._context_data}\n\nUser Question: {question}\n\nProvide a detailed forensic analysis response:"
+            prompt = (
+                f"{self._system_prompt()}\n\n"
+                f"{self._context_data}\n\nUser Question: {question}\n\nProvide a detailed forensic analysis response:"
+            )
 
             r = requests.post(
                 f"{self._active_base_url}/api/generate",
@@ -286,7 +296,7 @@ When answering questions:
                 json={
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": "You are an expert memory forensics analyst."},
+                        {"role": "system", "content": self._system_prompt()},
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": 0.3,
@@ -319,7 +329,10 @@ When answering questions:
         if not ANTHROPIC_API_KEY:
             return "Anthropic API key is missing. Set ANTHROPIC_API_KEY."
 
-        prompt = f"{self._context_data}\n\nUser Question: {question}\n\nProvide a detailed forensic analysis response:"
+        prompt = (
+            f"{self._system_prompt()}\n\n"
+            f"{self._context_data}\n\nUser Question: {question}\n\nProvide a detailed forensic analysis response:"
+        )
         try:
             r = requests.post(
                 f"{ANTHROPIC_BASE_URL}/messages",
@@ -332,7 +345,7 @@ When answering questions:
                     "model": ANTHROPIC_MODEL,
                     "max_tokens": 1024,
                     "temperature": 0.3,
-                    "system": "You are an expert memory forensics analyst.",
+                    "system": self._system_prompt(),
                     "messages": [{"role": "user", "content": prompt}],
                 },
                 timeout=AI_TIMEOUT_SECONDS,
@@ -420,3 +433,12 @@ When answering questions:
 
     def get_recommendations(self, scenario_id: str = "") -> str:
         return self.ask("What remediation steps and recommendations do you suggest", scenario_id)
+
+    def _system_prompt(self) -> str:
+        confirmed = self._confirmed_mitre_ids or "None confirmed yet"
+        return (
+            "You are an expert Windows memory forensics analyst using Volatility 3. "
+            f"CONFIRMED MITRE ATT&CK techniques detected in this analysis: {confirmed}. "
+            "When referencing MITRE techniques, only use IDs from the confirmed list. "
+            "Never invent or guess technique IDs. If unsure, say 'refer to the MITRE ATT&CK page.'"
+        )

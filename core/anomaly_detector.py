@@ -54,12 +54,14 @@ class AnomalyDetector:
         dlllist = plugin_results.get("windows.dlllist", None)
         svcscan = plugin_results.get("windows.svcscan", None)
 
+        process_index = self._build_process_index(pslist.data if pslist and pslist.success else [])
+
         if pslist and pslist.success:
-            self._analyze_processes(pslist.data, cmdline.data if cmdline and cmdline.success else [])
+            self._analyze_processes(process_index, cmdline.data if cmdline and cmdline.success else [])
         if netscan and netscan.success:
             self._analyze_network(netscan.data)
         if malfind and malfind.success:
-            self._analyze_injections(malfind.data)
+            self._analyze_injections(malfind.data, process_index)
         if dlllist and dlllist.success:
             self._analyze_dlls(dlllist.data)
         if svcscan and svcscan.success:
@@ -68,35 +70,54 @@ class AnomalyDetector:
         self.findings.sort(key=lambda f: f.risk_score, reverse=True)
         return self.findings
 
-    def _analyze_processes(self, processes: List[Dict], cmdlines: List[Dict]):
+    def _build_process_index(self, processes: List[Dict]) -> Dict[int, Dict]:
+        process_index: Dict[int, Dict] = {}
+        for process in processes:
+            pid = process.get("PID") or process.get("pid")
+            if pid is None:
+                continue
+            try:
+                pid_int = int(pid)
+            except (TypeError, ValueError):
+                continue
+
+            process_index[pid_int] = {
+                "name": str(process.get("ImageFileName") or process.get("Name") or process.get("name") or "").lower(),
+                "ppid": process.get("PPID") or process.get("ppid"),
+                "raw": process,
+                "timestamp": process.get("CreateTime") or process.get("create_time") or process.get("StartTime") or process.get("start_time") or "",
+            }
+        return process_index
+
+    def _analyze_processes(self, process_index: Dict[int, Dict], cmdlines: List[Dict]):
         cmdline_map = {}
         for c in cmdlines:
             pid = c.get("PID") or c.get("pid")
             args = c.get("Args") or c.get("args") or c.get("CommandLine") or ""
-            if pid:
-                cmdline_map[pid] = args
-
-        process_map = {}
-        for p in processes:
-            pid = p.get("PID") or p.get("pid")
-            name = (p.get("ImageFileName") or p.get("Name") or p.get("name") or "").lower()
-            ppid = p.get("PPID") or p.get("ppid")
-            offset = p.get("Offset") or p.get("offset") or ""
-            process_map[pid] = {"name": name, "ppid": ppid, "raw": p}
+            try:
+                pid_int = int(pid)
+            except (TypeError, ValueError):
+                continue
+            cmdline_map[pid_int] = args
 
         instance_alerted = set()
-        for pid, info in process_map.items():
+        for pid, info in process_index.items():
             name = info["name"]
             ppid = info["ppid"]
-            parent_name = process_map.get(ppid, {}).get("name", "unknown")
+            try:
+                parent_pid = int(ppid)
+            except (TypeError, ValueError):
+                parent_pid = None
+            parent_name = process_index.get(parent_pid, {}).get("name", "unknown") if parent_pid is not None else "unknown"
             cmdline = cmdline_map.get(pid, "")
 
             self._check_path_anomaly(name, cmdline, pid, info["raw"])
             self._check_parent_anomaly(name, parent_name, pid, info["raw"])
+            self._check_scripting_runtime_parent(name, parent_name, pid, info["raw"])
             self._check_name_spoofing(name, pid, info["raw"])
             self._check_suspicious_cmdline(name, cmdline, pid, info["raw"])
 
-            count = sum(1 for p2 in process_map.values() if p2["name"] == name)
+            count = sum(1 for p2 in process_index.values() if p2["name"] == name)
             expected = WINDOWS_SYSTEM_PROCESSES.get(name, {}).get("expected_instances", -1)
             # Avoid flooding findings for common noisy multi-instance behavior.
             if expected > 0 and count > (expected + 2) and name not in instance_alerted:
@@ -110,12 +131,19 @@ class AnomalyDetector:
                     mitre_techniques=["T1036"],
                 ))
 
+    def _is_expected_smss_child(self, name: str, parent_name: str) -> bool:
+        smss_children = {"csrss.exe", "winlogon.exe", "wininit.exe"}
+        return name.lower() in smss_children and parent_name in {"", "unknown", "smss.exe"}
+
     def _check_path_anomaly(self, name: str, cmdline: str, pid, raw: Dict):
         expected = WINDOWS_SYSTEM_PROCESSES.get(name, {}).get("expected_path", "")
         if not expected or not cmdline:
             return
 
         cmdline_lower = cmdline.lower().replace("/", "\\")
+        if "\\" not in cmdline_lower:
+            return
+
         expected_lower = expected.lower()
 
         if expected_lower and expected_lower not in cmdline_lower:
@@ -129,6 +157,9 @@ class AnomalyDetector:
                 ))
 
     def _check_parent_anomaly(self, name: str, parent_name: str, pid, raw: Dict):
+        if self._is_expected_smss_child(name, parent_name):
+            return
+
         suspicious_list = SUSPICIOUS_PARENTS.get(name, [])
         if parent_name in suspicious_list:
             self.findings.append(Finding(
@@ -140,6 +171,9 @@ class AnomalyDetector:
             ))
 
         expected_parent = WINDOWS_SYSTEM_PROCESSES.get(name, {}).get("expected_parent", "")
+        if parent_name == "unknown" and expected_parent and expected_parent not in ("", "idle"):
+            return
+
         if (
             expected_parent
             and parent_name not in ("", "unknown")
@@ -153,6 +187,25 @@ class AnomalyDetector:
                 description=f"{name} should be child of {expected_parent}, but parent is {parent_name}.",
                 risk_score=6.2, evidence=raw,
                 mitre_techniques=["T1036"],
+            ))
+
+    def _check_scripting_runtime_parent(self, name: str, parent_name: str, pid, raw: Dict):
+        runtime_names = {"python.exe", "pythonw.exe", "python3.exe", "node.exe", "perl.exe", "ruby.exe", "wscript.exe", "cscript.exe"}
+        suspicious_parents = {"services.exe", "svchost.exe", "lsass.exe", "winlogon.exe"}
+
+        if name.lower() not in runtime_names:
+            return
+
+        if parent_name in suspicious_parents:
+            self.findings.append(Finding(
+                category="process",
+                artifact_id=f"PID:{pid}",
+                title=f"Scripting runtime spawned by service host: {name}",
+                description=f"{name} was spawned by {parent_name}, which is unusual and can indicate persistence or service-backed execution.",
+                risk_score=6.8,
+                evidence=raw,
+                triage_status="review",
+                mitre_techniques=["T1059.006", "T1543.003"],
             ))
 
     def _check_name_spoofing(self, name: str, pid, raw: Dict):
@@ -247,13 +300,26 @@ class AnomalyDetector:
                     mitre_techniques=["T1071", "T1041"],
                 ))
 
-    def _analyze_injections(self, malfind_data: List[Dict]):
+    def _analyze_injections(self, malfind_data: List[Dict], process_index: Dict[int, Dict]):
+        seen_pids = set()
         for entry in malfind_data:
             pid = entry.get("PID") or entry.get("pid") or ""
-            name = entry.get("Process") or entry.get("process") or entry.get("Name") or ""
+            try:
+                pid_int = int(pid)
+            except (TypeError, ValueError):
+                pid_int = None
+
+            if pid_int is not None:
+                if pid_int in seen_pids:
+                    continue
+                seen_pids.add(pid_int)
+
+            process_meta = process_index.get(pid_int, {}) if pid_int is not None else {}
+            name = entry.get("Process") or entry.get("process") or entry.get("Name") or process_meta.get("name") or ""
             protection = str(entry.get("Protection") or entry.get("protection") or "")
             tag = str(entry.get("Tag") or entry.get("tag") or "")
             name_lower = name.lower().strip()
+            timestamp = entry.get("CreateTime") or entry.get("create_time") or entry.get("timestamp") or process_meta.get("timestamp") or ""
 
             score = 7.5
             techniques = ["T1055"]
@@ -271,7 +337,7 @@ class AnomalyDetector:
             if name_lower in BENIGN_INJECTION_PROCESSES:
                 # Security tools and vendor scanners often map executable memory that is not
                 # immediately actionable; keep the signal but label it cautiously.
-                score = min(score, 4.6)
+                score = min(score, 4.0)
                 title_prefix = "Possible code injection"
                 description_prefix = (
                     f"Malfind flagged executable memory in {name}, which is common in security/diagnostic tools. "
@@ -286,7 +352,8 @@ class AnomalyDetector:
                 title=f"{title_prefix} in {name} (PID {pid})",
                 description=f"{description_prefix} Protection: {protection}. {'Potential process injection signal.' if name_lower in BENIGN_INJECTION_PROCESSES else 'Strong indicator of process injection.'}",
                 risk_score=score, evidence=entry,
-                    triage_status="review" if name_lower in BENIGN_INJECTION_PROCESSES else "malicious",
+                timestamp=str(timestamp),
+                triage_status="review" if score < 6.0 or name_lower in BENIGN_INJECTION_PROCESSES else "malicious",
                 mitre_techniques=techniques,
             ))
 

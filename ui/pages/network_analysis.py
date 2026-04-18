@@ -27,10 +27,19 @@ def render_network_analysis():
 
     remote_ips = set()
     unique_ports = set()
+
+    def _is_loopback_or_local(addr: str) -> bool:
+        normalized = str(addr).strip().lower()
+        if normalized.startswith("[") and normalized.endswith("]"):
+            normalized = normalized[1:-1]
+        if "%" in normalized:
+            normalized = normalized.split("%", 1)[0]
+        return normalized in {"", "0.0.0.0", "::", "::1", "*", "-", "127.0.0.1", "localhost"}
+
     for conn in connections:
         raddr = str(conn.get("ForeignAddr") or conn.get("foreign_addr") or "")
         rport = conn.get("ForeignPort") or conn.get("foreign_port")
-        if raddr and raddr not in ("0.0.0.0", "::", "*", "-", "127.0.0.1"):
+        if raddr and not _is_loopback_or_local(raddr):
             remote_ips.add(raddr)
         if rport and str(rport) not in ("0", "*", "-"):
             unique_ports.add(rport)
@@ -75,7 +84,6 @@ def render_network_analysis():
         all_pids = set()
         for conn in connections:
             proto = conn.get("Proto") or conn.get("protocol") or ""
-            local_addr = conn.get("LocalAddr") or conn.get("local_addr") or ""
             local_port = conn.get("LocalPort") or conn.get("local_port") or ""
             remote_addr = conn.get("ForeignAddr") or conn.get("foreign_addr") or ""
             remote_port = conn.get("ForeignPort") or conn.get("foreign_port") or ""
@@ -90,7 +98,6 @@ def render_network_analysis():
 
             rows.append({
                 "Protocol": str(proto),
-                "Local Address": str(local_addr),
                 "Local Port": "" if local_port is None else str(local_port),
                 "Remote Address": str(remote_addr),
                 "Remote Port": "" if remote_port is None else str(remote_port),
@@ -138,7 +145,20 @@ def render_network_analysis():
             return [""] * len(row)
 
         styled = filtered_df.style.apply(_highlight_conn, axis=1)
-        st.dataframe(styled, width="stretch", height=min(500, 40 + len(filtered_df) * 35))
+        st.dataframe(
+            styled,
+            use_container_width=True,
+            height=min(500, 40 + len(filtered_df) * 35),
+            column_config={
+                "Protocol": st.column_config.TextColumn(width="small"),
+                "Local Port": st.column_config.TextColumn(width="small"),
+                "Remote Address": st.column_config.TextColumn(width="medium"),
+                "Remote Port": st.column_config.TextColumn(width="small"),
+                "State": st.column_config.TextColumn(width="small"),
+                "PID": st.column_config.TextColumn(width="small"),
+                "Owner": st.column_config.TextColumn(width="medium"),
+            },
+        )
 
         st.markdown(
             f"<div style='color:#64748b;font-size:0.78rem;text-align:right;padding:2px 4px'>"

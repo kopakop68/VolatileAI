@@ -1,5 +1,7 @@
 """Forensic Timeline page for VolatileAI."""
 
+import textwrap
+
 import streamlit as st
 from datetime import datetime
 from ui.components.metrics import page_header, info_banner, stat_card
@@ -181,7 +183,8 @@ def render_timeline():
 
         details = evt.get("details")
         if details:
-            with st.expander(f"Details — {title[:40]}", expanded=False):
+            detail_label = textwrap.shorten(str(title), width=54, placeholder="…")
+            with st.expander(f"Details — {detail_label}", expanded=False):
                 if isinstance(details, dict):
                     for k, v in details.items():
                         st.markdown(f"**{k}:** `{v}`")

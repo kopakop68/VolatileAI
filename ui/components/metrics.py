@@ -86,6 +86,7 @@ def finding_card(title: str, description: str, risk_score: float,
         status_html = (
             "<span style='background:" + status_color + "18;color:" + status_color + ";padding:2px 10px;"
             "border-radius:12px;font-size:0.72rem;font-weight:800;border:1px solid " + status_color + "33;"
+            "white-space:nowrap;display:inline-flex;align-items:center;"
             "margin-left:8px'>" + status_label + "</span>"
         )
 
@@ -93,12 +94,14 @@ def finding_card(title: str, description: str, risk_score: float,
         "<div style='background:#0f172a;border:1px solid " + color + "22;border-left:3px solid " + color + ";"
         "border-radius:10px;padding:0.8rem 1rem;margin-bottom:0.6rem;"
         "box-shadow:0 2px 10px rgba(0,0,0,0.15)'>"
-        "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:6px'>"
-        "<span style='font-weight:700;color:#f1f5f9;font-size:0.95rem'>[" + icon + "] " + title + "" + status_html + "</span>"
+        "<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px'>"
+        "<div style='min-width:0;flex:1 1 auto;font-weight:700;color:#f1f5f9;font-size:0.95rem;line-height:1.25'>"
+        "[" + icon + "] " + title + "</div>"
         "<span style='background:" + color + "18;color:" + color + ";padding:2px 10px;"
         "border-radius:12px;font-size:0.75rem;font-weight:700;border:1px solid " + color + "33'>"
         + score_str + " / 10</span>"
         "</div>"
+        + status_html +
         "<div style='color:#94a3b8;font-size:0.85rem;margin-bottom:6px'>" + desc_trunc + "</div>"
         "<div style='display:flex;gap:4px;flex-wrap:wrap'>" + techs_html + "</div>"
         + evidence_html +
