@@ -214,7 +214,13 @@ class AnomalyDetector:
         except (TypeError, ValueError):
             ppid_int = -1
 
-        if parent_name == "unknown" and ppid_int > 4:
+        session_id = raw.get("SessionId") or raw.get("session_id") or raw.get("Session") or raw.get("session")
+        try:
+            session_int = int(session_id)
+        except (TypeError, ValueError):
+            session_int = 1
+
+        if parent_name == "unknown" and ppid_int > 4 and session_int == 0:
             self.findings.append(Finding(
                 category="process",
                 artifact_id=f"PID:{pid}",
@@ -300,13 +306,6 @@ class AnomalyDetector:
                 })
                 record["evidence"] = conn
 
-                if "CLOSED" in state.upper():
-                    record["reasons"].append(f"CLOSED connection to {remote_addr}:{remote_port}")
-                    record["risk_score"] = max(record["risk_score"], 4.8)
-                    record["mitre_techniques"].add("T1071")
-                    if not record["title"]:
-                        record["title"] = f"Closed external connection observed: {remote_addr}"
-
                 if remote_port in SUSPICIOUS_PORTS:
                     record["reasons"].append(f"suspicious remote port {remote_port}")
                     record["risk_score"] = max(record["risk_score"], 7.5)
@@ -334,9 +333,15 @@ class AnomalyDetector:
                 record["risk_score"] = max(record["risk_score"], 8.0)
                 record["mitre_techniques"].add("T1571")
 
+            if not remote_port and not (local_port in SUSPICIOUS_PORTS and "LISTEN" in state.upper()):
+                continue
+
         for (pid_key, entity), record in endpoint_findings.items():
-            title = record["title"] or f"Suspicious network activity for {entity}"
             reasons = record["reasons"]
+            if not reasons:
+                continue
+
+            title = record["title"] or f"Suspicious network activity for {entity}"
             if reasons:
                 if len(reasons) == 1:
                     description = f"Process {pid_key} shows {reasons[0]}. Review whether this endpoint is expected."
@@ -424,8 +429,8 @@ class AnomalyDetector:
             path = str(entry.get("Path") or entry.get("path") or entry.get("Base") or "")
             dll_name = str(entry.get("Name") or "").lower()
 
-            path_lower = path.lower()
-            if any(d in path_lower for d in ["\\temp\\", "\\tmp\\", "\\appdata\\local\\temp", "\\downloads\\"]):
+            path_norm = path.lower().replace("/", "\\")
+            if any(d in path_norm for d in ["\\temp\\", "\\tmp\\", "\\appdata\\local\\temp", "\\downloads\\"]):
                 self.findings.append(Finding(
                     category="dll", artifact_id=f"PID:{pid}:{dll_name}",
                     title=f"DLL loaded from suspicious path",
@@ -441,7 +446,7 @@ class AnomalyDetector:
             state = str(svc.get("State") or svc.get("ServiceState") or "")
             start_type = str(svc.get("Start") or svc.get("StartType") or "")
 
-            binary_lower = binary.lower()
+            binary_lower = binary.lower().replace("/", "\\")
             if any(d in binary_lower for d in ["\\temp\\", "\\tmp\\", "\\appdata\\", "\\users\\public\\"]):
                 self.findings.append(Finding(
                     category="persistence", artifact_id=f"SVC:{svc_name}",

@@ -105,11 +105,11 @@ def render_ioc_summary():
     with tab_procs:
         if suspicious_processes:
             rows = []
-            for proc in sorted(suspicious_processes):
+            for proc in sorted(suspicious_processes, key=lambda p: process_scores.get(p, 0), reverse=True):
                 score = process_scores.get(proc, 0)
                 level = "CRITICAL" if score >= 8 else "HIGH" if score >= 6 else "MEDIUM" if score >= 4 else "LOW"
                 rows.append({"Process": proc, "Risk Score": score, "Risk Level": level})
-            df = pd.DataFrame(rows).sort_values("Risk Score", ascending=False)
+            df = pd.DataFrame(rows)
 
             def _color_risk(val):
                 colors = {"CRITICAL": "#ef4444", "HIGH": "#f97316", "MEDIUM": "#eab308", "LOW": "#22c55e"}

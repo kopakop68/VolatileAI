@@ -34,7 +34,7 @@ def _has_suspicious_parent(name: str, ppid: int, pid_map: dict) -> bool:
 
     parent = pid_map.get(ppid, {})
     parent_name = (parent.get("ImageFileName") or parent.get("Name") or parent.get("name") or "").lower()
-    return parent_name not in [p.lower() for p in SUSPICIOUS_PARENTS[name_lower]]
+    return parent_name in [p.lower() for p in SUSPICIOUS_PARENTS[name_lower]]
 
 
 def render_process_analysis():

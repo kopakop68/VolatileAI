@@ -146,11 +146,11 @@ def render_dashboard():
     )
 
     top_three = sorted(critical_findings, key=lambda f: f.risk_score, reverse=True)[:3]
-    if not top_three:
-        if review_findings:
-            info_banner("Only review items are present right now. Validate those first, then rerun analysis if needed.", "warning")
-        else:
-            info_banner("No findings yet. Load evidence to begin analysis.", "info")
+    if not top_three and review_findings:
+        top_three = sorted(review_findings, key=lambda f: f.risk_score, reverse=True)[:3]
+        info_banner("Only review items are present right now. Validate those first, then rerun analysis if needed.", "warning")
+    elif not top_three:
+        info_banner("No findings yet. Load evidence to begin analysis.", "info")
         return
 
     actions = []

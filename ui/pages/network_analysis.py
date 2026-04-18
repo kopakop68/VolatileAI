@@ -131,14 +131,20 @@ def render_network_analysis():
         if selected_pids:
             filtered_df = filtered_df[filtered_df["PID"].astype(str).isin(selected_pids)]
 
-        suspicious_remotes = {
-            f.artifact_id for f in network_findings
-        }
+        suspicious_remote_ips = set()
+        suspicious_listen_pids = set()
+        for finding in network_findings:
+            evidence = finding.evidence if isinstance(finding.evidence, dict) else {}
+            remote_ip = str(evidence.get("ForeignAddr") or evidence.get("foreign_addr") or evidence.get("RemoteAddr") or "").strip()
+            if remote_ip:
+                suspicious_remote_ips.add(remote_ip)
+            if finding.title.lower().startswith("listening on suspicious port"):
+                suspicious_listen_pids.add(finding.artifact_id.replace("PID:", ""))
 
         def _highlight_conn(row):
             remote = str(row.get("Remote Address", ""))
             pid = str(row.get("PID", ""))
-            if f"CONN:{remote}" in suspicious_remotes or f"PID:{pid}" in suspicious_remotes:
+            if remote in suspicious_remote_ips or pid in suspicious_listen_pids:
                 return ["background-color: rgba(239,68,68,0.12); color: #fca5a5"] * len(row)
             state = str(row.get("State", "")).upper()
             if state == "ESTABLISHED":
