@@ -1,12 +1,12 @@
 """Anomaly detection engine — heuristic-based scoring for processes, network, and DLLs."""
 
 import re
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List
 from dataclasses import dataclass, field
 
 from config import (
     WINDOWS_SYSTEM_PROCESSES, SUSPICIOUS_PARENTS,
-    SUSPICIOUS_PORTS, HOMOGLYPH_MAP
+    SUSPICIOUS_PORTS, HOMOGLYPH_MAP, BENIGN_INJECTION_PROCESSES
 )
 
 
@@ -20,6 +20,7 @@ class Finding:
     evidence: Dict
     mitre_techniques: List[str] = field(default_factory=list)
     timestamp: str = ""
+    triage_status: str = "malicious"
 
     @property
     def risk_level(self) -> str:
@@ -30,6 +31,10 @@ class Finding:
         elif self.risk_score >= 4.0:
             return "medium"
         return "low"
+
+    @property
+    def requires_manual_review(self) -> bool:
+        return self.triage_status == "review"
 
 
 class AnomalyDetector:
@@ -101,6 +106,7 @@ class AnomalyDetector:
                     title=f"Multiple instances of {name}",
                     description=f"Found {count} instances of {name}, expected {expected}. May indicate process masquerading.",
                     risk_score=5.8, evidence=info["raw"],
+                    triage_status="review",
                     mitre_techniques=["T1036"],
                 ))
 
@@ -247,22 +253,40 @@ class AnomalyDetector:
             name = entry.get("Process") or entry.get("process") or entry.get("Name") or ""
             protection = str(entry.get("Protection") or entry.get("protection") or "")
             tag = str(entry.get("Tag") or entry.get("tag") or "")
+            name_lower = name.lower().strip()
 
             score = 7.5
             techniques = ["T1055"]
+            title_prefix = "Code injection"
+            description_prefix = f"Malfind detected executable memory in {name}."
 
             if "PAGE_EXECUTE_READWRITE" in protection.upper():
                 score = 9.0
                 techniques.append("T1055.001")
+                description_prefix = f"Malfind detected executable read/write memory in {name}."
 
-            if name.lower() in ("lsass.exe", "svchost.exe", "services.exe"):
+            if name_lower in ("lsass.exe", "svchost.exe", "services.exe"):
                 score = min(score + 1.0, 10.0)
+
+            if name_lower in BENIGN_INJECTION_PROCESSES:
+                # Security tools and vendor scanners often map executable memory that is not
+                # immediately actionable; keep the signal but label it cautiously.
+                score = min(score, 4.6)
+                title_prefix = "Possible code injection"
+                description_prefix = (
+                    f"Malfind flagged executable memory in {name}, which is common in security/diagnostic tools. "
+                    f"Verify whether this is expected for the installed version, vendor-signing state, and runtime context."
+                )
+                techniques = ["T1055"]
+                if "PAGE_EXECUTE_READWRITE" in protection.upper():
+                    techniques.append("T1055.001")
 
             self.findings.append(Finding(
                 category="injection", artifact_id=f"PID:{pid}",
-                title=f"Code injection in {name} (PID {pid})",
-                description=f"Malfind detected executable code in {name}. Protection: {protection}. Strong indicator of process injection.",
+                title=f"{title_prefix} in {name} (PID {pid})",
+                description=f"{description_prefix} Protection: {protection}. {'Potential process injection signal.' if name_lower in BENIGN_INJECTION_PROCESSES else 'Strong indicator of process injection.'}",
                 risk_score=score, evidence=entry,
+                    triage_status="review" if name_lower in BENIGN_INJECTION_PROCESSES else "malicious",
                 mitre_techniques=techniques,
             ))
 

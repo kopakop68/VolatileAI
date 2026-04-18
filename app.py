@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import streamlit as st
 
-from config import APP_NAME, APP_VERSION, APP_TAGLINE
+from config import APP_NAME
 from core.volatility_engine import VolatilityEngine
 from core.anomaly_detector import AnomalyDetector
 from core.mitre_mapper import MitreMapper
@@ -75,8 +75,6 @@ def main():
             <div style='font-size:1.3rem;font-weight:800;color:#f1f5f9;letter-spacing:-0.02em'>
                 {APP_NAME}
             </div>
-            <div style='font-size:0.7rem;color:#64748b;margin-top:2px'>{APP_TAGLINE}</div>
-            <div style='font-size:0.65rem;color:#475569;margin-top:4px'>v{APP_VERSION}</div>
             </div>""",
             unsafe_allow_html=True,
         )
@@ -148,6 +146,16 @@ def main():
     elif "Report" in page:
         from ui.pages.reports_page import render_reports
         render_reports()
+
+    st.markdown("<div style='height:1.4rem'></div>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class='project-footer'>
+            <div class='project-footer__name'>Made by Kopal Chaturvedi</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":

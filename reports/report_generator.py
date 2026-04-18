@@ -2,7 +2,7 @@
 
 import io
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import List
 
 from fpdf import FPDF
 

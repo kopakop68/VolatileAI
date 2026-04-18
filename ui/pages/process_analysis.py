@@ -2,7 +2,7 @@
 
 import streamlit as st
 import pandas as pd
-from ui.components.metrics import page_header, info_banner, finding_card, risk_badge
+from ui.components.metrics import page_header, info_banner, finding_card
 from ui.components.charts import create_process_tree
 
 SUSPICIOUS_PARENTS = {

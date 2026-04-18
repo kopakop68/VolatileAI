@@ -259,6 +259,18 @@ SUSPICIOUS_PARENTS = {
 
 _DEFAULT_SUSPICIOUS_PARENTS = deepcopy(SUSPICIOUS_PARENTS)
 
+# Security/forensics tools and OS components that can trigger malfind-style alerts
+# without necessarily indicating compromise.
+BENIGN_INJECTION_PROCESSES = [
+    "ftk imager.exe",
+    "mrt.exe",
+    "msmpeng.exe",
+    "windefend.exe",
+    "defender.exe",
+]
+
+_DEFAULT_BENIGN_INJECTION_PROCESSES = list(BENIGN_INJECTION_PROCESSES)
+
 SUSPICIOUS_PORTS = [4444, 5555, 8888, 1337, 31337, 6666, 6667, 9001, 9050, 9051, 12345, 54321]
 KNOWN_C2_PORTS = [443, 8443, 8080, 80, 53]
 
@@ -311,6 +323,7 @@ def validate_and_normalize_config() -> None:
     global OPENTEXT_BASE_URL, OPENTEXT_MODEL, OPENTEXT_API_KEY
     global RISK_LEVELS, VOLATILITY_PLUGINS_WINDOWS, VOLATILITY_PLUGINS_LINUX
     global WINDOWS_SYSTEM_PROCESSES, SUSPICIOUS_PARENTS, SUSPICIOUS_PORTS, KNOWN_C2_PORTS, HOMOGLYPH_MAP
+    global BENIGN_INJECTION_PROCESSES
 
     # Normalize core paths and ensure runtime directories exist.
     DATA_DIR = Path(DATA_DIR).expanduser()
@@ -357,6 +370,7 @@ def validate_and_normalize_config() -> None:
     WINDOWS_SYSTEM_PROCESSES = _normalize_windows_processes(WINDOWS_SYSTEM_PROCESSES, _DEFAULT_WINDOWS_SYSTEM_PROCESSES)
     SUSPICIOUS_PARENTS = _normalize_map_of_string_lists(SUSPICIOUS_PARENTS, _DEFAULT_SUSPICIOUS_PARENTS)
     HOMOGLYPH_MAP = _normalize_homoglyph_map(HOMOGLYPH_MAP, _DEFAULT_HOMOGLYPH_MAP)
+    BENIGN_INJECTION_PROCESSES = _normalize_plugin_list(BENIGN_INJECTION_PROCESSES, _DEFAULT_BENIGN_INJECTION_PROCESSES)
 
     SUSPICIOUS_PORTS = _to_int_list(SUSPICIOUS_PORTS) or _DEFAULT_SUSPICIOUS_PORTS
     KNOWN_C2_PORTS = _to_int_list(KNOWN_C2_PORTS) or _DEFAULT_KNOWN_C2_PORTS

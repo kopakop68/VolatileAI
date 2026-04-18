@@ -21,6 +21,8 @@ def render_dashboard():
 
     findings = st.session_state.get("findings", [])
     risk_summary = st.session_state.detector.get_risk_summary()
+    review_findings = [f for f in findings if getattr(f, "triage_status", "") == "review"]
+    critical_findings = [f for f in findings if getattr(f, "triage_status", "") != "review"]
 
     total_findings = len(findings)
     critical_count = risk_summary.get("critical", 0)
@@ -68,6 +70,12 @@ def render_dashboard():
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
+    if review_findings:
+        info_banner(
+            f"{len(review_findings)} finding(s) need human review. These are not being treated as confirmed malicious activity.",
+            "warning",
+        )
+
     # --- Top critical findings ---
     st.markdown(
         "<h4 style='color:#f1f5f9;font-weight:700;margin-bottom:0.5rem'>"
@@ -75,10 +83,13 @@ def render_dashboard():
         unsafe_allow_html=True,
     )
 
-    top_findings = sorted(findings, key=lambda f: f.risk_score, reverse=True)[:10]
+    top_findings = sorted(critical_findings, key=lambda f: f.risk_score, reverse=True)[:10]
 
     if not top_findings:
-        info_banner("No findings detected in the loaded evidence.", "info")
+        if review_findings:
+            info_banner("No confirmed malicious findings detected. Review items are listed below for analyst validation.", "info")
+        else:
+            info_banner("No findings detected in the loaded evidence.", "info")
         plugin_results = st.session_state.get("plugin_results", {})
         if plugin_results:
             succeeded = sum(1 for result in plugin_results.values() if result.success)
@@ -103,6 +114,24 @@ def render_dashboard():
                 category=f.category,
                 techniques=f.mitre_techniques,
                 evidence_id=f.artifact_id,
+                triage_status=getattr(f, "triage_status", ""),
+            )
+
+    if review_findings:
+        st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+        st.markdown(
+            "<h4 style='color:#f1f5f9;font-weight:700;margin-bottom:0.5rem'>Human Review Required</h4>",
+            unsafe_allow_html=True,
+        )
+        for f in sorted(review_findings, key=lambda f: f.risk_score, reverse=True):
+            finding_card(
+                title=f.title,
+                description=f.description,
+                risk_score=f.risk_score,
+                category=f.category,
+                techniques=f.mitre_techniques,
+                evidence_id=f.artifact_id,
+                triage_status=getattr(f, "triage_status", "review"),
             )
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
@@ -114,13 +143,20 @@ def render_dashboard():
         unsafe_allow_html=True,
     )
 
-    top_three = sorted(findings, key=lambda f: f.risk_score, reverse=True)[:3]
+    top_three = sorted(critical_findings, key=lambda f: f.risk_score, reverse=True)[:3]
     if not top_three:
-        info_banner("No findings yet. Load evidence to begin analysis.", "info")
+        if review_findings:
+            info_banner("Only review items are present right now. Validate those first, then rerun analysis if needed.", "warning")
+        else:
+            info_banner("No findings yet. Load evidence to begin analysis.", "info")
         return
 
     actions = []
     for finding in top_three:
+        if getattr(finding, "triage_status", "") == "review":
+            action = f"Review **{finding.title}** with human attention first ({finding.risk_score:.1f}/10) and confirm whether it is expected behavior or a true issue."
+            actions.append(action)
+            continue
         action = f"Review **{finding.title}** ({finding.risk_level.upper()}, {finding.risk_score:.1f}/10) and validate artifact `{finding.artifact_id}`."
         actions.append(action)
 

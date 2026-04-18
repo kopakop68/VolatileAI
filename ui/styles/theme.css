@@ -1,17 +1,25 @@
 /* VolatileAI — Professional Dark Forensics Theme */
 
-#MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
-header {visibility: hidden;}
 
-.main .block-container {
+[data-testid="stMainBlockContainer"] {
     padding-top: 1.5rem;
-    padding-bottom: 2rem;
+    padding-bottom: 4rem;
     max-width: 1300px;
+    display: flex;
+    flex-direction: column;
 }
 
 html, body, [class*="css"], .stApp {
     font-family: "IBM Plex Sans", "Source Sans Pro", "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+button[data-testid="stBaseButton-headerNoPadding"] {
+    visibility: visible !important;
+}
+
+[data-testid="stAppDeployButton"] {
+    display: none !important;
 }
 
 /* Metric cards with glass morphism */
@@ -175,4 +183,27 @@ section[data-testid="stSidebar"] .stRadio label {
 hr {
     border-color: #1e293b !important;
     opacity: 0.5;
+}
+
+/* Project footer */
+.project-footer {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    left: 0;    
+    width: 100%;
+    padding: 0.8rem 1rem;
+    background: #020617;
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    opacity: 0.82;
+    border-top: 1px solid rgba(148,163,184,0.08);
+    text-align: center;
+    z-index: 999;
+}
+    body:has([data-testid="stSidebar"][aria-expanded="false"]) .project-footer {
+    left: 0;
+    width: 100%;
 }

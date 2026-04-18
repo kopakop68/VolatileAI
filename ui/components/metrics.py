@@ -1,7 +1,6 @@
 """Reusable UI metric and badge components."""
 
 import streamlit as st
-from typing import Optional
 
 
 def page_header(title: str, subtitle: str = "", icon: str = ""):
@@ -51,7 +50,7 @@ def stat_card(label: str, value, color: str = "#38bdf8", icon: str = ""):
 
 
 def finding_card(title: str, description: str, risk_score: float,
-                 category: str, techniques: list, evidence_id: str = ""):
+                 category: str, techniques: list, evidence_id: str = "", triage_status: str = ""):
     risk_level = "critical" if risk_score >= 8 else "high" if risk_score >= 6 else "medium" if risk_score >= 4 else "low"
     color_map = {"critical": "#ef4444", "high": "#f97316", "medium": "#eab308", "low": "#22c55e"}
     color = color_map[risk_level]
@@ -73,12 +72,29 @@ def finding_card(title: str, description: str, risk_score: float,
     score_str = "{:.1f}".format(risk_score)
     desc_trunc = description[:200]
 
+    status_label = ""
+    status_color = ""
+    if triage_status == "review":
+        status_label = "HUMAN REVIEW REQUIRED"
+        status_color = "#eab308"
+    elif triage_status == "informational":
+        status_label = "INFORMATIONAL"
+        status_color = "#94a3b8"
+
+    status_html = ""
+    if status_label:
+        status_html = (
+            "<span style='background:" + status_color + "18;color:" + status_color + ";padding:2px 10px;"
+            "border-radius:12px;font-size:0.72rem;font-weight:800;border:1px solid " + status_color + "33;"
+            "margin-left:8px'>" + status_label + "</span>"
+        )
+
     html = (
         "<div style='background:#0f172a;border:1px solid " + color + "22;border-left:3px solid " + color + ";"
         "border-radius:10px;padding:0.8rem 1rem;margin-bottom:0.6rem;"
         "box-shadow:0 2px 10px rgba(0,0,0,0.15)'>"
         "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:6px'>"
-        "<span style='font-weight:700;color:#f1f5f9;font-size:0.95rem'>[" + icon + "] " + title + "</span>"
+        "<span style='font-weight:700;color:#f1f5f9;font-size:0.95rem'>[" + icon + "] " + title + "" + status_html + "</span>"
         "<span style='background:" + color + "18;color:" + color + ";padding:2px 10px;"
         "border-radius:12px;font-size:0.75rem;font-weight:700;border:1px solid " + color + "33'>"
         + score_str + " / 10</span>"

@@ -1,8 +1,9 @@
 """Plotly chart components for VolatileAI."""
 
+from datetime import datetime
+
 import plotly.graph_objects as go
-import plotly.express as px
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Any
 
 COLORS = {
     "primary": "#38bdf8", "secondary": "#818cf8", "success": "#22c55e",
@@ -20,6 +21,36 @@ DARK_LAYOUT = dict(
 )
 
 RISK_COLORS = {"critical": "#ef4444", "high": "#f97316", "medium": "#eab308", "low": "#22c55e"}
+
+
+def _parse_timestamp(value: Any):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+
+    candidate_formats = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M",
+    ]
+    for fmt in candidate_formats:
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+
+    try:
+        from dateutil import parser as date_parser  # type: ignore
+        return date_parser.parse(text)
+    except Exception:
+        return None
 
 
 def create_risk_donut(summary: Dict[str, int]) -> go.Figure:
@@ -206,12 +237,13 @@ def create_timeline(events: List[Dict]) -> go.Figure:
         risk = float(evt.get("risk_score", 0) or 0)
         size = max(8, min(26, 8 + risk * 1.8))
 
-        xs.append(str(evt.get("timestamp", "")))
+        parsed_ts = _parse_timestamp(evt.get("timestamp", ""))
+        xs.append(parsed_ts or evt.get("timestamp", ""))
         ys.append(cat_idx + jitter_pattern[offset_idx])
         sizes.append(size)
         colors.append(cat_colors.get(category, "#94a3b8"))
         hover_titles.append(str(evt.get("title", "")))
-        hover_times.append(str(evt.get("timestamp", "")))
+        hover_times.append(parsed_ts.strftime("%Y-%m-%d %H:%M:%S") if parsed_ts else str(evt.get("timestamp", "")))
         hover_risks.append(risk)
         hover_categories.append(category.capitalize())
 
@@ -236,7 +268,7 @@ def create_timeline(events: List[Dict]) -> go.Figure:
         **DARK_LAYOUT,
         height=max(380, 180 + len(categories) * 70),
         title=dict(text="Attack Timeline", font=dict(size=15)),
-        xaxis=dict(title="Time", gridcolor="#1e293b"),
+        xaxis=dict(title="Time", gridcolor="#1e293b", type="date", tickformat="%Y-%m-%d\n%H:%M"),
         yaxis=dict(
             title="Category",
             gridcolor="#1e293b",
@@ -245,6 +277,7 @@ def create_timeline(events: List[Dict]) -> go.Figure:
             ticktext=[c.capitalize() for c in categories],
             zeroline=False,
         ),
+        hovermode="closest",
     )
     return fig
 

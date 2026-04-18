@@ -164,7 +164,19 @@ def render_reports():
         scenario_id = st.session_state.get("current_scenario", "") or ""
         with st.expander("AI Summary Preview"):
             ai_summary = st.session_state.ai_engine.get_auto_analysis(scenario_id)
-            st.markdown(ai_summary)
+            st.markdown(
+                f"""
+                <div style='background:#0f172a;border:1px solid #1e293b;border-radius:10px;
+                    padding:1rem 1.2rem;color:#e2e8f0;font-size:0.9rem;line-height:1.7;
+                    overflow-wrap:anywhere'>
+                    <div style='color:#38bdf8;font-weight:700;margin-bottom:0.6rem'>AI Summary</div>
+                    <div style='color:#e2e8f0'>
+                        { _md_to_html(ai_summary) }
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
 def _md_to_html(md: str) -> str:
@@ -172,5 +184,7 @@ def _md_to_html(md: str) -> str:
     html = md.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     html = re.sub(r"\*\*(.+?)\*\*", r"<strong style='color:#38bdf8'>\1</strong>", html)
     html = re.sub(r"_(.+?)_", r"<em>\1</em>", html)
+    html = re.sub(r"(?m)^- (.+)$", r"<div style='margin-left:0.8rem'>• \1</div>", html)
+    html = re.sub(r"(?m)^\d+\. (.+)$", r"<div style='margin-left:0.8rem'>• \1</div>", html)
     html = html.replace("\n", "<br>")
     return html

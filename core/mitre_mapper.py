@@ -1,12 +1,7 @@
 """MITRE ATT&CK mapping engine — maps findings to techniques."""
 
-import json
-from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set
 from dataclasses import dataclass
-
-from config import MITRE_DIR
-
 
 @dataclass
 class MitreTechnique:

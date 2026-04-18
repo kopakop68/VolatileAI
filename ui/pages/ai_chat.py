@@ -17,6 +17,35 @@ SUGGESTED_QUESTIONS = [
 ]
 
 
+def _render_chat_card(role: str, content: str):
+    if role == "user":
+        border = "#38bdf8"
+        title = "User"
+    else:
+        border = "#818cf8"
+        title = "AI Analyst"
+
+    import re
+
+    safe = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    safe = re.sub(r"\*\*(.+?)\*\*", r"<strong style='color:#f8fafc'>\1</strong>", safe)
+    safe = re.sub(r"_(.+?)_", r"<em>\1</em>", safe)
+    safe = safe.replace("\n", "<br>")
+
+    st.markdown(
+        f"""
+        <div style='background:#0f172a;border:1px solid {border}33;border-left:3px solid {border};
+            border-radius:12px;padding:0.85rem 1rem;margin:0.4rem 0;color:#e2e8f0;
+            box-shadow:0 2px 10px rgba(0,0,0,0.15)'>
+            <div style='color:{border};font-size:0.72rem;font-weight:700;letter-spacing:0.08em;
+                text-transform:uppercase;margin-bottom:0.35rem'>{title}</div>
+            <div style='color:#e2e8f0;font-size:0.92rem;line-height:1.65;overflow-wrap:anywhere'>{safe}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_ai_chat():
     page_header("AI Forensic Analyst", icon="")
 
@@ -82,17 +111,17 @@ def render_ai_chat():
 
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            _render_chat_card(msg["role"], msg["content"])
 
     if prompt := st.chat_input("Ask about the investigation..."):
         st.session_state.chat_history.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
-            st.markdown(prompt)
+            _render_chat_card("user", prompt)
 
         response = ai_engine.ask(prompt, scenario_id)
         st.session_state.chat_history.append({"role": "assistant", "content": response})
         with st.chat_message("assistant"):
-            st.markdown(response)
+            _render_chat_card("assistant", response)
 
     if not st.session_state.chat_history:
         st.markdown("---")

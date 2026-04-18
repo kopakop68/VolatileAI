@@ -9,7 +9,7 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

@@ -1,8 +1,69 @@
 """Forensic Timeline page for VolatileAI."""
 
 import streamlit as st
+from datetime import datetime
 from ui.components.metrics import page_header, info_banner, stat_card
 from ui.components.charts import create_timeline
+
+
+def _format_timestamp(value):
+    if value is None:
+        return "Timestamp unavailable"
+    text = str(value).strip()
+    if not text:
+        return "Timestamp unavailable"
+
+    formats = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M",
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(text, fmt).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+
+    try:
+        from dateutil import parser as date_parser  # type: ignore
+
+        return date_parser.parse(text).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return text
+
+
+def _extract_event_timestamp(finding):
+    direct = getattr(finding, "timestamp", "") or ""
+    if direct:
+        return direct
+
+    evidence = getattr(finding, "evidence", {}) or {}
+    if not isinstance(evidence, dict):
+        return ""
+
+    candidate_keys = (
+        "CreateTime",
+        "create_time",
+        "Created",
+        "created",
+        "Timestamp",
+        "timestamp",
+        "Time",
+        "time",
+        "LastModified",
+        "last_modified",
+        "InsertTime",
+        "insert_time",
+    )
+    for key in candidate_keys:
+        value = evidence.get(key)
+        if value:
+            return value
+
+    return ""
 
 
 def render_timeline():
@@ -20,14 +81,21 @@ def render_timeline():
     else:
         events = []
         for f in st.session_state.findings:
+            timestamp = _extract_event_timestamp(f)
             events.append({
-                "timestamp": f.timestamp,
+                "timestamp": timestamp,
                 "category": f.category,
                 "title": f.title,
                 "risk_score": f.risk_score,
                 "details": f.evidence,
             })
         events.sort(key=lambda e: e.get("timestamp", ""))
+
+    if events and not any(str(e.get("timestamp", "")).strip() for e in events):
+        info_banner(
+            "The loaded findings do not contain usable timestamps, so the timeline can only show category order. If you want exact times, load a dump or scenario with CreateTime/Created fields.",
+            "warning",
+        )
 
     categories = sorted({e.get("category", "unknown") for e in events})
     total_events = len(events)
@@ -83,7 +151,7 @@ def render_timeline():
         }
         icon = cat_icons.get(cat, "OBS")
 
-        timestamp = evt.get("timestamp", "N/A")
+        timestamp = _format_timestamp(evt.get("timestamp", ""))
         title = evt.get("title", "Untitled Event")
 
         st.markdown(f"""

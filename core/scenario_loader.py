@@ -1,7 +1,6 @@
 """Demo scenario loader — loads synthetic Volatility data for demos."""
 
 import json
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from config import DEMO_DIR
