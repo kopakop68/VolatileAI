@@ -343,9 +343,12 @@ def create_mitre_heatmap(tactic_data: Dict[str, List]) -> go.Figure:
         hovertemplate="<b>%{y}</b><br>Tactic: %{x}<br>Severity: %{marker.color:.1f}<extra></extra>",
     ))
 
-    fig.update_layout(**DARK_LAYOUT, height=max(400, len(techniques) * 35),
-        margin=dict(l=280, r=30, t=50, b=40),
+    layout = {**DARK_LAYOUT, "margin": dict(l=280, r=30, t=50, b=40)}
+    fig.update_layout(
+        **layout,
+        height=max(400, len(techniques) * 35),
         title=dict(text="MITRE ATT&CK Detection Map", font=dict(size=15)),
         xaxis=dict(tickangle=-45, gridcolor="#1e293b"),
-        yaxis=dict(gridcolor="#1e293b"))
+        yaxis=dict(gridcolor="#1e293b"),
+    )
     return fig
