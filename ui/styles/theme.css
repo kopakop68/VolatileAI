@@ -61,7 +61,18 @@ section[data-testid="stSidebar"] {
 section[data-testid="stSidebar"] .stRadio label {
     color: #cbd5e1 !important;
     font-weight: 500;
-    padding: 0.4rem 0;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    margin-bottom: 0.2rem;
+    background: rgba(15, 23, 42, 0.3);
+    transition: all 0.2s ease;
+}
+
+section[data-testid="stSidebar"] .stRadio label:hover {
+    border-color: rgba(56, 189, 248, 0.35);
+    background: rgba(15, 23, 42, 0.62);
+    color: #e2e8f0 !important;
 }
 
 /* Tabs — sleek underline style */
@@ -155,6 +166,14 @@ section[data-testid="stSidebar"] .stRadio label {
     box-shadow: 0 0 0 2px rgba(56,189,248,0.15) !important;
 }
 
+.stMarkdown a {
+    color: #38bdf8;
+}
+
+.stMarkdown a:hover {
+    color: #7dd3fc;
+}
+
 /* Select box */
 .stSelectbox > div > div {
     border-radius: 10px !important;
@@ -203,7 +222,7 @@ hr {
     text-align: center;
     z-index: 999;
 }
-    body:has([data-testid="stSidebar"][aria-expanded="false"]) .project-footer {
+body:has([data-testid="stSidebar"][aria-expanded="false"]) .project-footer {
     left: 0;
     width: 100%;
 }

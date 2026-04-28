@@ -177,7 +177,7 @@ def _apply_completed_analysis_if_needed():
     status["applied"] = True
 
 
-def _render_analysis_progress():
+def _render_analysis_progress(allow_full_rerun: bool = False):
     status = st.session_state.analysis_status
     state = status.get("state", "idle")
     if state not in {"running", "completed", "failed"}:
@@ -230,8 +230,9 @@ def _render_analysis_progress():
                 unsafe_allow_html=True,
             )
         st.caption("You can switch tabs; plugin execution will continue.")
-        time.sleep(1.2)
-        st.rerun()
+        if allow_full_rerun:
+            time.sleep(1.1)
+            st.rerun()
 
     elif state == "failed":
         st.error(f"Plugin execution failed: {status.get('error', 'Unknown error')}")
@@ -256,6 +257,29 @@ def _render_analysis_progress():
             with st.expander("Plugin errors", expanded=False):
                 for item in failed:
                     st.markdown(f"- {item}")
+
+
+def _render_analysis_progress_live():
+    """Render progress with minimal UI flicker while background analysis runs."""
+    status = st.session_state.analysis_status
+    state = status.get("state", "idle")
+
+    if state != "running":
+        _render_analysis_progress(allow_full_rerun=False)
+        return
+
+    # Streamlit fragment reruns only this block on interval, avoiding full-page
+    # rerenders that can cause visible dim/flash during long analysis runs.
+    if hasattr(st, "fragment"):
+        @st.fragment(run_every="1s")
+        def _progress_fragment():
+            _render_analysis_progress(allow_full_rerun=False)
+
+        _progress_fragment()
+        return
+
+    # Fallback for older Streamlit versions.
+    _render_analysis_progress(allow_full_rerun=True)
 
 
 def _render_evidence_details(evidence):
@@ -475,7 +499,7 @@ def render_home():
 
     _render_evidence_loader()
 
-    _render_analysis_progress()
+    _render_analysis_progress_live()
 
     status = st.session_state.analysis_status
     if status.get("state") == "completed" and status.get("applied"):

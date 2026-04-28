@@ -98,7 +98,6 @@ def render_process_analysis():
 
     with tab_details:
         rows = []
-        expected_session_init = []
         for p in processes:
             pid = p.get("PID") or p.get("pid")
             ppid = p.get("PPID") or p.get("ppid")

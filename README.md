@@ -125,7 +125,7 @@ For a complete file-by-file behavior reference, see DOCUMENTATION.md.
 ## 7) Quick Start
 
 ```bash
-cd /home/shivam/Major/VolatileAI
+cd /home/kopal/Major/VolatileAI
 chmod +x setup.sh run.sh
 ./setup.sh
 ./run.sh

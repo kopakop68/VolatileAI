@@ -177,6 +177,8 @@ REPORTS_DIR = BASE_DIR / "reports" / "output"
 APP_NAME = "VolatileAI"
 APP_VERSION = "1.0.0"
 APP_TAGLINE = "AI-Powered Memory Forensics Investigation Platform"
+GITHUB_REPO_URL = _env_str("VOLATILEAI_GITHUB_REPO_URL", "https://github.com/kopakop68/VolatileAI")
+GITHUB_ISSUES_URL = _env_str("VOLATILEAI_GITHUB_ISSUES_URL", f"{GITHUB_REPO_URL.rstrip('/')}/issues")
 
 SUPPORTED_FORMATS = [".raw", ".vmem", ".dmp", ".mem", ".lime", ".img"]
 
